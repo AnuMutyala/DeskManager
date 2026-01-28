@@ -1,38 +1,136 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { eq, and, gte, lte } from "drizzle-orm";
+import { 
+  users, seats, bookings,
+  type User, type InsertUser,
+  type Seat, type InsertSeat,
+  type Booking, type InsertBooking
+} from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
+  // User
+  getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  // Seat
+  getSeats(): Promise<Seat[]>;
+  getSeat(id: number): Promise<Seat | undefined>;
+  createSeat(seat: InsertSeat): Promise<Seat>;
+  updateSeat(id: number, seat: Partial<InsertSeat>): Promise<Seat>;
+  deleteSeat(id: number): Promise<void>;
+  
+  // Booking
+  getBookings(filters?: { date?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]>;
+  getBooking(id: number): Promise<Booking | undefined>;
+  createBooking(booking: InsertBooking): Promise<Booking>;
+  deleteBooking(id: number): Promise<void>;
+  
+  // Custom checks
+  isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+export class DatabaseStorage implements IStorage {
+  // User
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  // Seat
+  async getSeats(): Promise<Seat[]> {
+    return await db.select().from(seats);
+  }
+
+  async getSeat(id: number): Promise<Seat | undefined> {
+    const [seat] = await db.select().from(seats).where(eq(seats.id, id));
+    return seat;
+  }
+
+  async createSeat(insertSeat: InsertSeat): Promise<Seat> {
+    const [seat] = await db.insert(seats).values(insertSeat).returning();
+    return seat;
+  }
+
+  async updateSeat(id: number, seatUpdate: Partial<InsertSeat>): Promise<Seat> {
+    const [seat] = await db.update(seats).set(seatUpdate).where(eq(seats.id, id)).returning();
+    return seat;
+  }
+
+  async deleteSeat(id: number): Promise<void> {
+    await db.delete(seats).where(eq(seats.id, id));
+  }
+
+  // Booking
+  async getBookings(filters?: { date?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]> {
+    let query = db.select().from(bookings)
+      .leftJoin(seats, eq(bookings.seatId, seats.id))
+      .leftJoin(users, eq(bookings.userId, users.id));
+
+    if (filters?.date) {
+      query = query.where(eq(bookings.date, filters.date)) as any;
+    }
+    
+    if (filters?.userId) {
+      // If we already have a where clause, we need to use 'and', but simpler to just chain if supported or check.
+      // Drizzle 'where' replaces previous where. Need 'and' for multiple conditions.
+      // Let's rewrite slightly for safety.
+      const conditions = [];
+      if (filters.date) conditions.push(eq(bookings.date, filters.date));
+      if (filters.userId) conditions.push(eq(bookings.userId, filters.userId));
+      
+      if (conditions.length > 0) {
+        // @ts-ignore - complex type inference
+        query = query.where(and(...conditions));
+      }
+    }
+
+    const result = await query;
+    // Map result to simpler structure if needed, or return joined result. 
+    // The type signature expects (Booking & { seat: Seat; user: User }).
+    // The result from join is { bookings: Booking, seats: Seat, users: User }
+    
+    return result.map(row => ({
+      ...row.bookings!,
+      seat: row.seats!,
+      user: row.users!
+    }));
+  }
+
+  async getBooking(id: number): Promise<Booking | undefined> {
+    const [booking] = await db.select().from(bookings).where(eq(bookings.id, id));
+    return booking;
+  }
+
+  async createBooking(insertBooking: InsertBooking): Promise<Booking> {
+    const [booking] = await db.insert(bookings).values(insertBooking).returning();
+    return booking;
+  }
+
+  async deleteBooking(id: number): Promise<void> {
+    await db.delete(bookings).where(eq(bookings.id, id));
+  }
+
+  async isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean> {
+    const existing = await db.select().from(bookings).where(
+      and(
+        eq(bookings.seatId, seatId),
+        eq(bookings.date, date),
+        eq(bookings.slot, slot)
+      )
+    );
+    return existing.length === 0;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
