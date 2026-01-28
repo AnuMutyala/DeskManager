@@ -120,6 +120,22 @@ export async function registerRoutes(
     const seats = await storage.getSeats();
     res.json(seats);
   });
+  app.post('/api/layout/default', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body;
+      // Basic validation: expect array of { id?, label?, x, y }
+      if (!Array.isArray(body)) return res.status(400).json({ message: 'Invalid payload' });
+      const ok = body.every((b: any) => (typeof b.id === 'number' || typeof b.label === 'string') && typeof b.x === 'number' && typeof b.y === 'number');
+      if (!ok) return res.status(400).json({ message: 'Invalid layout format' });
+      // Normalize entries to include label if present and numbers for x/y
+      const normalized = body.map((b: any) => ({ id: typeof b.id === 'number' ? b.id : undefined, label: typeof b.label === 'string' ? b.label : undefined, x: Math.round(b.x), y: Math.round(b.y) }));
+      await fs.writeFile(new URL('./defaultLayout.json', import.meta.url), JSON.stringify(normalized, null, 2));
+      res.status(200).json({ message: 'Saved' });
+    } catch (err) {
+      console.error('Failed to save default layout:', err);
+      res.status(500).json({ message: 'Failed to save default layout' });
+    }
+  });
 
   app.post(api.seats.create.path, requireAdmin, async (req, res) => {
     try {

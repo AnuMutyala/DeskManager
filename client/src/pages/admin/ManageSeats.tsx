@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useSeats } from "@/hooks/use-seats";
 import { Seat, InsertSeat } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,30 @@ export default function ManageSeats() {
 
   const handleToggleBlock = (seat: Seat) => {
     updateSeat.mutate({ id: seat.id, isBlocked: !seat.isBlocked });
+  };
+  const { toast } = useToast();
+
+  const saveCurrentAsDefault = async () => {
+    if (!seats) return;
+    try {
+      const payload = seats.map((s) => {
+        const pos = positionsRef.current[s.id] ?? positions[s.id] ?? { x: s.x ?? 0, y: s.y ?? 0 };
+        return { id: s.id, label: s.label, x: pos.x, y: pos.y };
+      });
+      const res = await fetch('/api/layout/default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || res.statusText || 'Failed to save default layout');
+      }
+      toast({ title: 'Saved', description: 'Current layout saved as default' });
+    } catch (err: any) {
+      console.error('Save default layout failed:', err);
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || 'Failed to save default layout' });
+    }
   };
 
   return (
@@ -172,6 +196,9 @@ export default function ManageSeats() {
       </div>
 
       <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden">
+            <Button variant="secondary" size="sm" onClick={saveCurrentAsDefault}>
+              Save Current as Default
+            </Button>
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50">
