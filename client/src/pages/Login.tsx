@@ -20,7 +20,6 @@ export default function Login() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     login({ username, password });
@@ -35,7 +34,10 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
       <div className="w-full max-w-md animate-in">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-display font-bold text-primary mb-2">HotDesk</h1>
+          <div className="flex items-center justify-center mb-3">
+            <img src="/ufinityLogo.svg" alt="Ufinity" className="w-12 h-12 mr-3" />
+            <h1 className="text-4xl font-display font-bold text-primary">HotDesk</h1>
+          </div>
           <p className="text-muted-foreground">Modern Workspace Management</p>
         </div>
 
@@ -50,14 +52,13 @@ export default function Login() {
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="register">Register</TabsTrigger>
               </TabsList>
-              
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
-                    <Input 
-                      id="username" 
-                      value={username} 
+                    <Input
+                      id="username"
+                      value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder="jdoe"
                       required
@@ -66,10 +67,10 @@ export default function Login() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      value={password} 
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       className="bg-secondary/30"
@@ -81,14 +82,14 @@ export default function Login() {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="register">
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="reg-username">Choose Username</Label>
-                    <Input 
-                      id="reg-username" 
-                      value={username} 
+                    <Input
+                      id="reg-username"
+                      value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       required
                       className="bg-secondary/30"
@@ -96,10 +97,10 @@ export default function Login() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="reg-password">Choose Password</Label>
-                    <Input 
-                      id="reg-password" 
-                      type="password" 
-                      value={password} 
+                    <Input
+                      id="reg-password"
+                      type="password"
+                      value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       className="bg-secondary/30"
