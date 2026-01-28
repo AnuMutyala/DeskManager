@@ -33,10 +33,17 @@ export default function Dashboard() {
   // Determine seat status
   const getSeatStatus = (seatId: number) => {
     const seatBookings = bookings?.filter(b => b.seatId === seatId) || [];
-    if (seatBookings.length === 0) return "available";
-    if (seatBookings.some(b => b.slot === "FULL")) return "booked";
-    if (seatBookings.length === 2) return "booked"; // Both AM and PM
-    return "partial";
+    if (seatBookings.length === 0) return { status: "available", am: false, pm: false };
+    
+    const hasAM = seatBookings.some(b => b.slot === "AM" || b.slot === "FULL");
+    const hasPM = seatBookings.some(b => b.slot === "PM" || b.slot === "FULL");
+    const isFull = hasAM && hasPM;
+    
+    return { 
+      status: isFull ? "booked" : "partial", 
+      am: hasAM, 
+      pm: hasPM 
+    };
   };
 
   return (
@@ -90,7 +97,7 @@ export default function Dashboard() {
         {/* Simple Grid Layout for Seats (Demo) */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 relative z-0">
           {seats?.map(seat => {
-            const status = getSeatStatus(seat.id);
+            const { status, am, pm } = getSeatStatus(seat.id);
             const isBlocked = seat.isBlocked;
             
             return (
@@ -118,15 +125,25 @@ export default function Dashboard() {
                 `}>
                   {seat.label}
                 </div>
-                <div className="text-xs text-muted-foreground capitalize font-medium">{seat.type}</div>
+                
+                <div className="flex flex-col items-center">
+                  <div className="text-[10px] text-muted-foreground capitalize font-medium">{seat.type}</div>
+                  {status !== 'available' && !isBlocked && (
+                    <div className="flex gap-1 mt-1">
+                      <span className={`text-[9px] px-1 rounded-sm border ${am ? 'bg-green-500 text-white border-green-600' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>AM</span>
+                      <span className={`text-[9px] px-1 rounded-sm border ${pm ? 'bg-green-500 text-white border-green-600' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>PM</span>
+                    </div>
+                  )}
+                </div>
                 
                 {/* Visual Indicator of Desk */}
-                <div className="w-12 h-1 bg-current opacity-20 rounded-full mt-2" />
+                <div className="w-12 h-1 bg-current opacity-20 rounded-full mt-1" />
               </button>
             );
           })}
         </div>
       </Card>
+
 
       <BookingModal 
         seat={selectedSeat} 
