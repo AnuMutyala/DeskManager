@@ -42,12 +42,25 @@ export function useSeats() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error("Failed to update seat");
+      if (!res.ok) {
+        let body: any = null;
+        try {
+          body = await res.json();
+        } catch (e) {
+          /* ignore */
+        }
+        const message = body?.message || res.statusText || "Failed to update seat";
+        throw new Error(message);
+      }
       return api.seats.update.responses[200].parse(await res.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.seats.list.path] });
       toast({ title: "Success", description: "Seat updated successfully" });
+    },
+    onError: (err: any) => {
+      console.error("updateSeat error:", err?.message || err);
+      toast({ variant: "destructive", title: "Update failed", description: err?.message || "Failed to update seat" });
     },
   });
 

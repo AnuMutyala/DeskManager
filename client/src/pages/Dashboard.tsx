@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { useSeats } from "@/hooks/use-seats";
-import { useBookings } from "@/hooks/use-bookings";
 import { BookingModal } from "@/components/BookingModal";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { format, addDays } from "date-fns";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { useBookings } from "@/hooks/use-bookings";
+import { useSeats } from "@/hooks/use-seats";
 import { Seat } from "@shared/schema";
+import { addDays, format } from "date-fns";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -14,6 +14,7 @@ export default function Dashboard() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const { seats, isLoading: seatsLoading } = useSeats();
+
   const { bookings, isLoading: bookingsLoading } = useBookings({ date: dateStr });
 
   if (seatsLoading || bookingsLoading) {
@@ -46,10 +47,7 @@ export default function Dashboard() {
     };
   };
 
-  const renderSeat = (label: string) => {
-    const seat = seats?.find(s => s.label === label);
-    if (!seat) return <div key={label} className="w-12 h-12 border-2 border-dashed border-border/20 rounded-lg flex items-center justify-center text-[10px] text-muted-foreground/30">{label}</div>;
-
+  const renderSeatButton = (seat: Seat) => {
     const { status, am, pm } = getSeatStatus(seat.id);
     const isBlocked = seat.isBlocked;
 
@@ -108,78 +106,28 @@ export default function Dashboard() {
 
       {/* Floor Plan Visualization */}
       <Card className="p-12 min-h-[700px] relative overflow-auto bg-white border-border/50">
-        <div className="absolute top-4 right-4 flex gap-4 text-xs font-medium bg-card p-3 rounded-lg border shadow-sm z-10">
+			 <div className="absolute top-4 right-4 flex gap-4 text-xs font-medium bg-card p-3 rounded-lg border shadow-sm z-10">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500" /> Available
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500" /> Partial
+            <div className="w-3 h-3 rounded-full bg-amber-500" /> Half Day available
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-slate-200 border" /> Booked
           </div>
         </div>
-
-        {/* Layout Container */}
-        <div className="flex flex-col gap-16 min-w-max">
-          {/* Top Row Clusters */}
-          <div className="flex gap-20">
-            {/* Cluster 1: Two 2x4 Horizontal Groups */}
-            <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-4 border-2 border-blue-200 p-1 rounded-sm gap-px">
-                {['T56', 'T55', 'T54', 'T53', 'T49', 'T50', 'T51', 'T52'].map(renderSeat)}
+        <div className="relative min-h-[700px] min-w-[900px]">
+            {(seats || []).map((seat) => (
+              <div
+                key={seat.id}
+                className="absolute"
+                style={{ left: seat.x ?? 0, top: seat.y ?? 0 }}
+              >
+                {renderSeatButton(seat)}
               </div>
-              <div className="grid grid-cols-4 border-2 border-blue-200 p-1 rounded-sm gap-px">
-                {['T48', 'T47', 'T46', 'T45', 'T41', 'T42', 'T43', 'T44'].map(renderSeat)}
-              </div>
-            </div>
-
-            {/* Cluster 2: 4x2 Vertical (T60-T57, T61-T64) */}
-            <div className="grid grid-cols-2 border-2 border-blue-200 p-1 rounded-sm gap-px">
-              {['T60', 'T61', 'T59', 'T62', 'T58', 'T63', 'T57', 'T64'].map(renderSeat)}
-            </div>
-
-            {/* Cluster 3: 4x2 Vertical (T68-T65, T69-T72) */}
-            <div className="grid grid-cols-2 border-2 border-blue-200 p-1 rounded-sm gap-px">
-              {['T68', 'T69', 'T67', 'T70', 'T66', 'T71', 'T65', 'T72'].map(renderSeat)}
-            </div>
-
-            {/* Cluster 4: 4x2 Vertical (T76-T73, T77-T80) */}
-            <div className="grid grid-cols-2 border-2 border-blue-200 p-1 rounded-sm gap-px">
-              {['T76', 'T77', 'T75', 'T78', 'T74', 'T79', 'T73', 'T80'].map(renderSeat)}
-            </div>
+            ))}
           </div>
-
-          {/* Bottom Row Clusters */}
-          <div className="flex gap-12 items-start">
-            {/* S-Range (S4-S1) */}
-            <div className="flex flex-col border-2 border-green-200 p-1 rounded-sm gap-px">
-              {['S4', 'S3', 'S2', 'S1'].map(renderSeat)}
-            </div>
-
-            {/* T-Range (T8-T5, T9-T12) */}
-            <div className="grid grid-cols-2 border-2 border-blue-200 p-1 rounded-sm gap-px">
-              {['T8', 'T9', 'T7', 'T10', 'T6', 'T11', 'T5', 'T12'].map(renderSeat)}
-            </div>
-
-            {/* T-Range (T16-T13, T17-T20) */}
-            <div className="grid grid-cols-2 border-2 border-blue-200 p-1 rounded-sm gap-px">
-              {['T16', 'T17', 'T15', 'T18', 'T14', 'T19', 'T13', 'T20'].map(renderSeat)}
-            </div>
-
-            {/* Horizontal T-Clusters */}
-            <div className="flex flex-col gap-12">
-              {/* Cluster (T40-T36, T31-T35) */}
-              <div className="grid grid-cols-5 border-2 border-blue-200 p-1 rounded-sm gap-px">
-                {['T40', 'T39', 'T38', 'T37', 'T36', 'T31', 'T32', 'T33', 'T34', 'T35'].map(renderSeat)}
-              </div>
-              {/* Cluster (T30-T26, T21-T25) */}
-              <div className="grid grid-cols-5 border-2 border-blue-200 p-1 rounded-sm gap-px">
-                {['T30', 'T29', 'T28', 'T27', 'T26', 'T21', 'T22', 'T23', 'T24', 'T25'].map(renderSeat)}
-              </div>
-            </div>
-          </div>
-        </div>
       </Card>
 
       <BookingModal

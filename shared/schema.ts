@@ -14,6 +14,8 @@ export const seats = pgTable("seats", {
   id: serial("id").primaryKey(),
   label: text("label").notNull().unique(), // e.g., T56
   type: text("type", { enum: ["regular", "standing"] }).notNull().default("regular"),
+  x: integer("x").default(0),
+  y: integer("y").default(0),
   tags: jsonb("tags").$type<string[]>(), // e.g., ["near window", "monitor"]
   isBlocked: boolean("is_blocked").default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -35,14 +37,14 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-export const insertSeatSchema = createInsertSchema(seats).omit({ 
-  id: true, 
-  createdAt: true 
+export const insertSeatSchema = createInsertSchema(seats).omit({
+  id: true,
+  createdAt: true
 });
 
-export const insertBookingSchema = createInsertSchema(bookings).omit({ 
-  id: true, 
-  createdAt: true 
+export const insertBookingSchema = createInsertSchema(bookings).omit({
+  id: true,
+  createdAt: true
 });
 
 // Types

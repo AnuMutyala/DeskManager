@@ -1,15 +1,13 @@
+import { api } from "@shared/routes";
 import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { api, errorSchemas } from "@shared/routes";
-import { z } from "zod";
 import session from "express-session";
+import { promises as fs } from "fs";
+import { type Server } from "http";
+import MemoryStore from "memorystore";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import { db } from "./db";
-import MemoryStore from "memorystore";
+import { z } from "zod";
+import { storage } from "./storage";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -24,7 +22,7 @@ export async function registerRoutes(
     store: new SessionStore({
       checkPeriod: 86400000 // prune expired entries every 24h
     }),
-    cookie: { 
+    cookie: {
       secure: process.env.NODE_ENV === "production",
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -121,6 +119,35 @@ export async function registerRoutes(
     res.json(seats);
   });
 
+  // Default layout persistence
+  app.get('/api/layout/default', requireAdmin, async (req, res) => {
+    try {
+      const raw = await fs.readFile(new URL('./defaultLayout.json', import.meta.url));
+      const data = JSON.parse(raw.toString());
+      res.json(data);
+    } catch (err) {
+      console.error('Failed to read default layout:', err);
+      res.status(500).json({ message: 'Failed to read default layout' });
+    }
+  });
+
+  app.post('/api/layout/default', requireAdmin, async (req, res) => {
+    try {
+      const body = req.body;
+      // Basic validation: expect array of { id?, label?, x, y }
+      if (!Array.isArray(body)) return res.status(400).json({ message: 'Invalid payload' });
+      const ok = body.every((b: any) => (typeof b.id === 'number' || typeof b.label === 'string') && typeof b.x === 'number' && typeof b.y === 'number');
+      if (!ok) return res.status(400).json({ message: 'Invalid layout format' });
+      // Normalize entries to include label if present and numbers for x/y
+      const normalized = body.map((b: any) => ({ id: typeof b.id === 'number' ? b.id : undefined, label: typeof b.label === 'string' ? b.label : undefined, x: Math.round(b.x), y: Math.round(b.y) }));
+      await fs.writeFile(new URL('./defaultLayout.json', import.meta.url), JSON.stringify(normalized, null, 2));
+      res.status(200).json({ message: 'Saved' });
+    } catch (err) {
+      console.error('Failed to save default layout:', err);
+      res.status(500).json({ message: 'Failed to save default layout' });
+    }
+  });
+
   app.post(api.seats.create.path, requireAdmin, async (req, res) => {
     try {
       const input = api.seats.create.input.parse(req.body);
@@ -129,7 +156,10 @@ export async function registerRoutes(
     } catch (err) {
       if (err instanceof z.ZodError) {
         res.status(400).json({ message: err.errors[0].message });
+      } else if ((err as any)?.code === "23505") {
+        res.status(409).json({ message: "Seat label already exists" });
       } else {
+        console.error("Create seat error:", err);
         res.status(500).json({ message: "Internal Server Error" });
       }
     }
@@ -146,7 +176,10 @@ export async function registerRoutes(
        if (err instanceof z.ZodError) {
         res.status(400).json({ message: err.errors[0].message });
       } else {
-        res.status(500).json({ message: "Internal Server Error" });
+        console.error("Update seat error:", err);
+        // Include error message when available to help client debugging
+        const message = (err as any)?.message || "Internal Server Error";
+        res.status(500).json({ message });
       }
     }
   });
@@ -170,7 +203,7 @@ export async function registerRoutes(
   app.post(api.bookings.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.bookings.create.input.parse(req.body);
-      
+
       // Check availability
       const isAvailable = await storage.isSeatAvailable(input.seatId, input.date, input.slot);
       if (!isAvailable) {
@@ -197,7 +230,7 @@ export async function registerRoutes(
   app.delete(api.bookings.cancel.path, requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const booking = await storage.getBooking(id);
-    
+
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     // Allow user to delete their own booking, or admin to delete any
@@ -219,11 +252,11 @@ async function seedDatabase() {
   const existingUsers = await storage.getUserByUsername("admin");
   if (!existingUsers) {
     console.log("Seeding database...");
-    
+
     // Create Users
     await storage.createUser({ username: "admin", password: "password", role: "admin" });
     await storage.createUser({ username: "employee", password: "password", role: "employee" });
-    
+
     // Create Seats (Sample from the image labels)
     const seatLabels = [
       "T56", "T55", "T54", "T53", "T49", "T50", "T51", "T52",
@@ -242,4 +275,6 @@ async function seedDatabase() {
     }
     console.log("Seeding complete.");
   }
+
+  // NOTE: seeding from defaultLayout.json is handled by the separate `script/seed.ts`.
 }
