@@ -228,6 +228,29 @@ export async function registerRoutes(
     }
   });
 
+  // Recurring bookings endpoint
+  app.post(api.bookings.recurring.path, requireAuth, async (req, res) => {
+    try {
+      const input = api.bookings.recurring.input.parse(req.body);
+      const occurrences = input.occurrences ?? 1;
+      const intervalWeeks = input.intervalWeeks ?? 1;
+
+      const result = await storage.createRecurringBookings(req.user.id, input.seatId, input.startDate, occurrences, intervalWeeks, input.slot);
+
+      if (!result.ok) {
+        return res.status(409).json({ message: 'One or more dates are unavailable', conflicts: result.conflicts });
+      }
+
+      res.status(201).json(result.bookings);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error('Recurring booking error:', err);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
+
   app.delete(api.bookings.cancel.path, requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const booking = await storage.getBooking(id);

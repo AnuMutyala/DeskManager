@@ -28,6 +28,8 @@ export interface IStorage {
   
   // Custom checks
   isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean>;
+  // Create recurring bookings. Returns {ok:true, bookings} on success or {ok:false, conflicts}
+  createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences?: number, intervalWeeks?: number, slot?: string): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -130,6 +132,40 @@ export class DatabaseStorage implements IStorage {
       )
     );
     return existing.length === 0;
+  }
+
+  async createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences = 1, intervalWeeks = 1, slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
+    const { addWeeks, parseISO, format } = await import('date-fns');
+
+    // validate seat
+    const seat = await this.getSeat(seatId);
+    if (!seat) return { ok: false, conflicts: [`Seat ${seatId} not found`] };
+    if (seat.isBlocked) return { ok: false, conflicts: [`Seat ${seatId} is blocked`] };
+
+    const dates: string[] = [];
+    const base = parseISO(startDate);
+    for (let i = 0; i < occurrences; i++) {
+      const d = addWeeks(base, i * intervalWeeks);
+      dates.push(format(d, 'yyyy-MM-dd'));
+    }
+
+    const conflicts: string[] = [];
+    for (const d of dates) {
+      const available = await this.isSeatAvailable(seatId, d, slot);
+      if (!available) conflicts.push(d);
+    }
+
+    if (conflicts.length > 0) {
+      return { ok: false, conflicts };
+    }
+
+    const created: Booking[] = [];
+    for (const d of dates) {
+      const [booking] = await db.insert(bookings).values({ userId, seatId, date: d, slot }).returning();
+      created.push(booking);
+    }
+
+    return { ok: true, bookings: created };
   }
 }
 

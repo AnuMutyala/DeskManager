@@ -115,6 +115,22 @@ export const api = {
         409: errorSchemas.conflict,
       },
     },
+    recurring: {
+      method: 'POST' as const,
+      path: '/api/bookings/recurring',
+      input: z.object({
+        seatId: z.number(),
+        startDate: z.string(), // YYYY-MM-DD
+        occurrences: z.number().min(1).optional(),
+        intervalWeeks: z.number().min(1).optional(),
+        slot: z.union([z.literal('AM'), z.literal('PM'), z.literal('FULL')])
+      }),
+      responses: {
+        201: z.array(z.custom<typeof bookings.$inferSelect>()),
+        400: errorSchemas.validation,
+        409: errorSchemas.conflict,
+      },
+    },
     cancel: {
       method: 'DELETE' as const,
       path: '/api/bookings/:id',
