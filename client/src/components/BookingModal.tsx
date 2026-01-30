@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Seat, InsertBooking } from "@shared/schema";
+import { Seat, InsertBooking, SeatType } from "@shared/schema";
 import { useBookings } from "@/hooks/use-bookings";
 import { useAuth } from "@/hooks/use-auth";
 import { Calendar, Clock, Armchair } from "lucide-react";
@@ -16,11 +16,9 @@ interface BookingModalProps {
 export function BookingModal({ seat, date, existingBookings, onClose }: BookingModalProps) {
   const { createBooking } = useBookings();
   const { user } = useAuth();
-  
   if (!seat || !user) return null;
 
   const dateStr = format(date, "yyyy-MM-dd");
-  
   // Check availability
   const bookingsForSeat = existingBookings.filter(b => b.seatId === seat.id && b.date === dateStr);
   const isAmBooked = bookingsForSeat.some(b => b.slot === "AM" || b.slot === "FULL");
@@ -33,7 +31,6 @@ export function BookingModal({ seat, date, existingBookings, onClose }: BookingM
       date: dateStr,
       slot
     };
-    
     createBooking.mutate(bookingData, {
       onSuccess: () => onClose()
     });
@@ -56,7 +53,12 @@ export function BookingModal({ seat, date, existingBookings, onClose }: BookingM
           <div className="bg-secondary/50 p-4 rounded-xl space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Type</span>
-              <span className="font-medium capitalize">{seat.type}</span>
+              <span className="font-medium capitalize flex items-center gap-2">
+                {seat.type}
+                {seat.type === SeatType.REGULAR ? (
+                  <span className="text-sm">🖥️</span>
+                ) : null}
+              </span>
             </div>
             {seat.tags && (
               <div className="flex flex-wrap gap-2 pt-2">
@@ -70,8 +72,8 @@ export function BookingModal({ seat, date, existingBookings, onClose }: BookingM
           </div>
 
           <div className="grid gap-3">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="justify-between h-auto py-4 text-base"
               disabled={isAmBooked || createBooking.isPending}
               onClick={() => handleBook("AM")}
@@ -86,8 +88,8 @@ export function BookingModal({ seat, date, existingBookings, onClose }: BookingM
               )}
             </Button>
 
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="justify-between h-auto py-4 text-base"
               disabled={isPmBooked || createBooking.isPending}
               onClick={() => handleBook("PM")}

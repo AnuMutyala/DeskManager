@@ -2,6 +2,12 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date } from 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Exported enum for seat `type` so code can reference named values
+export enum SeatType {
+  REGULAR = "REGULAR",
+  STANDING = "STANDING",
+}
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -13,7 +19,7 @@ export const users = pgTable("users", {
 export const seats = pgTable("seats", {
   id: serial("id").primaryKey(),
   label: text("label").notNull().unique(), // e.g., T56
-  type: text("type", { enum: ["regular", "standing"] }).notNull().default("regular"),
+  type: text("type", { enum: ["REGULAR", "STANDING"] }).notNull().default("REGULAR"),
   x: integer("x").default(0),
   y: integer("y").default(0),
   tags: jsonb("tags").$type<string[]>(), // e.g., ["near window", "monitor"]

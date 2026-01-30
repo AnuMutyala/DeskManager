@@ -5,26 +5,26 @@ We are looking for solutions that will digitise the process of booking and manag
 
 Scope: Implementing a user portal and admin portal for hot desk booking app
 
-Additional features: Login, roles and permissions 
+Additional features: Login, roles and permissions
 
-Reference: 
+Reference:
 
 Long Term Workstation Desks Allocations / Reservations
  (existing desk reservation)
 
 Meeting Spaces in the Office
- 
+
 
 MVP Detailed Scope
 Backend API
 
 User management (simple email/password auth, basic JWT) ​
 
-Seat CRUD with flexible metadata (type: regular/standing,tags as key-value) ​
+Seat CRUD with flexible metadata (type: with monitor/without monitor,tags as key-value) ​
 
 Booking API: create, view, cancel bookings (half-day slots:AM/PM) ​
 
-Bulk booking support (multiple seats and/or multiple days inone request) 
+Bulk booking support (multiple seats and/or multiple days inone request)
 
 Admin Portal
 
@@ -36,7 +36,7 @@ Block/unblock seats (mark unavailable for booking) ​
 
 Upload floor plan image (display only, non-interactive) ​
 
-View all bookings (filterable by date) 
+View all bookings (filterable by date)
 
 Public Portal
 
@@ -75,7 +75,7 @@ High
 
 3
 
-Recurring booking (e.g., every Monday AM for 4 weeks) 
+Recurring booking (e.g., every Monday AM for 4 weeks)
 
 Low-medium
 

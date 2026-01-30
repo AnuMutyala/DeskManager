@@ -139,7 +139,8 @@ export async function registerRoutes(
       const ok = body.every((b: any) => (typeof b.id === 'number' || typeof b.label === 'string') && typeof b.x === 'number' && typeof b.y === 'number');
       if (!ok) return res.status(400).json({ message: 'Invalid layout format' });
       // Normalize entries to include label if present and numbers for x/y
-      const normalized = body.map((b: any) => ({ id: typeof b.id === 'number' ? b.id : undefined, label: typeof b.label === 'string' ? b.label : undefined, x: Math.round(b.x), y: Math.round(b.y) }));
+      // Persist only label + x/y to avoid keeping stale DB ids which can change
+      const normalized = body.map((b: any) => ({ label: typeof b.label === 'string' ? b.label : undefined, x: Math.round(b.x), y: Math.round(b.y) }));
       await fs.writeFile(new URL('./defaultLayout.json', import.meta.url), JSON.stringify(normalized, null, 2));
       res.status(200).json({ message: 'Saved' });
     } catch (err) {
@@ -268,7 +269,8 @@ async function seedDatabase() {
     for (const label of seatLabels) {
       await storage.createSeat({
         label,
-        type: label.startsWith("S") ? "standing" : "regular",
+        // S = solo desks (no monitor), T = team cluster desks (with monitors)
+        type: label.startsWith("S") ? "STANDING" : "REGULAR",
         tags: [],
         isBlocked: false
       });

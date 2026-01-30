@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useSeats } from "@/hooks/use-seats";
-import { Seat, InsertSeat } from "@shared/schema";
+import { Seat, InsertSeat, SeatType } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,6 +48,7 @@ export default function ManageSeats() {
     | null
   >(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [openSeatMenu, setOpenSeatMenu] = useState<number | null>(null);
   const liveDragPositionsRef = useRef<Record<number, { x: number; y: number }>>({});
 
   // Form setup
@@ -55,7 +56,7 @@ export default function ManageSeats() {
     resolver: zodResolver(insertSeatSchema),
     defaultValues: {
       label: "",
-      type: "regular",
+      type: SeatType.REGULAR,
       isBlocked: false,
       tags: [],
       x: 0,
@@ -69,14 +70,14 @@ export default function ManageSeats() {
         onSuccess: () => {
           setIsDialogOpen(false);
           setEditingSeat(null);
-          form.reset({ label: "", type: "regular", isBlocked: false, tags: [], x: 0, y: 0 });
+          form.reset({ label: "", type: SeatType.REGULAR, isBlocked: false, tags: [], x: 0, y: 0 });
         }
       });
     } else {
       createSeat.mutate(data, {
         onSuccess: () => {
           setIsDialogOpen(false);
-          form.reset({ label: "", type: "regular", isBlocked: false, tags: [], x: 0, y: 0 });
+          form.reset({ label: "", type: SeatType.REGULAR, isBlocked: false, tags: [], x: 0, y: 0 });
         }
       });
     }
@@ -86,7 +87,7 @@ export default function ManageSeats() {
     setEditingSeat(seat);
     form.reset({
       label: seat.label,
-      type: seat.type as "regular" | "standing",
+      type: seat.type as SeatType.REGULAR | SeatType.STANDING,
       isBlocked: seat.isBlocked || false,
       tags: seat.tags as string[] || [],
       x: seat.x ?? 0,
@@ -224,6 +225,7 @@ export default function ManageSeats() {
     });
   }, [seats]);
 
+
   useEffect(() => {
     positionsRef.current = positions;
   }, [positions]);
@@ -317,6 +319,7 @@ export default function ManageSeats() {
     setIsDialogOpen(true);
   };
 
+		console.log("selectedIds: ",selectedIds)
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in">
       <div className="flex justify-between items-center">
@@ -329,7 +332,7 @@ export default function ManageSeats() {
           setIsDialogOpen(open);
           if (!open) {
             setEditingSeat(null);
-            form.reset({ label: "", type: "regular", isBlocked: false, tags: [], x: 0, y: 0 });
+            form.reset({ label: "", type: SeatType.REGULAR, isBlocked: false, tags: [], x: 0, y: 0 });
           }
         }}>
           <DialogTrigger asChild>
@@ -369,8 +372,8 @@ export default function ManageSeats() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="regular">Regular Desk</SelectItem>
-                          <SelectItem value="standing">Standing Desk</SelectItem>
+                          <SelectItem value={SeatType.REGULAR}> Monitor</SelectItem>
+                          <SelectItem value={SeatType.STANDING}>No Monitor</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -426,6 +429,7 @@ export default function ManageSeats() {
             <Button variant="secondary" size="sm" onClick={resetLayout}>
               Reset to Default
             </Button>
+
           </div>
         </div>
         <div className="p-4">
@@ -452,12 +456,44 @@ export default function ManageSeats() {
                         key={seat.id}
                         onPointerDown={(e) => startDrag(seat, e)}
                         data-seat
-                        className={`absolute w-12 h-12 rounded-md border bg-white text-[10px] font-semibold shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing ${selectedIds.includes(seat.id) ? 'ring-2 ring-primary/60' : ''}`}
+                        className={`absolute w-12 h-12 rounded-md border text-[10px] font-semibold shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing ${selectedIds.includes(seat.id) ? 'ring-2 ring-primary/60' : ''} ${seat.isBlocked ? 'bg-red-50 border-red-100' : 'bg-white border-green-200 hover:border-green-400'}`}
                         style={{ left: pos.x, top: pos.y }}
                         title={`Drag ${seat.label}`}
                         type="button"
                       >
                         {seat.label}
+                        {(seat.type === SeatType.REGULAR || String(seat.label).startsWith('T')) && (
+                          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-card/90 px-1 rounded-md border border-border/50">🖥️</div>
+                        )}
+
+                        <button
+                          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setOpenSeatMenu(openSeatMenu === seat.id ? null : seat.id); }}
+                          className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 bg-transparent p-1 text-xs"
+                          aria-label={`Actions for ${seat.label}`}
+                          type="button"
+                        >
+                          ⧉
+                        </button>
+
+                        {openSeatMenu === seat.id && (
+                          <div className="absolute top-full right-0 mt-1 w-36 bg-card border rounded-md shadow-md z-50" onPointerDown={(e) => e.stopPropagation()}>
+                          <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleToggleBlock(seat)}
+                      title={seat.isBlocked ? "Unblock" : "Block"}
+                    >
+                      <Ban className={`w-4 h-4 ${seat.isBlocked ? 'text-green-600' : 'text-orange-500'}`} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(seat)}>
+                      <Pencil className="w-4 h-4 text-blue-500" />
+                    </Button>
+										 <Button variant="ghost" size="icon">
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+
+                          </div>
+                        )}
                       </button>
                     );
                   })}

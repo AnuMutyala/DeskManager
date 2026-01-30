@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useBookings } from "@/hooks/use-bookings";
 import { useSeats } from "@/hooks/use-seats";
-import { Seat } from "@shared/schema";
+import { Seat, SeatType } from "@shared/schema";
 import { addDays, format } from "date-fns";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -71,6 +71,9 @@ export default function Dashboard() {
         `}
       >
         <span className="text-[10px] font-bold">{seat.label}</span>
+        {( seat.type === SeatType.REGULAR) && (
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-card/90 px-1 rounded-md border border-border/50">🖥️</div>
+        )}
         {status !== 'available' && !isBlocked && (
           <div className="flex gap-0.5 mt-0.5">
             <div className={`w-1.5 h-1.5 rounded-full ${am ? 'bg-amber-500' : 'bg-slate-200'}`} />

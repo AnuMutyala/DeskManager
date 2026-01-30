@@ -48,7 +48,7 @@ async function seed() {
         continue;
       }
       const label = entry.label;
-      const type = label.startsWith('S') ? 'standing' : 'regular';
+      const type = label.startsWith("S") ? "STANDING" : "REGULAR";
       const x = typeof entry.x === 'number' ? Math.round(entry.x) : 0;
       const y = typeof entry.y === 'number' ? Math.round(entry.y) : 0;
 
