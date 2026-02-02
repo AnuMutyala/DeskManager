@@ -33,6 +33,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Calendar } from "@/components/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/popover";
+import { format } from "date-fns";
 
 export default function ManageSeats() {
   const { seats, createSeat, updateSeat, deleteSeat } = useSeats();
@@ -50,6 +53,12 @@ export default function ManageSeats() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [openSeatMenu, setOpenSeatMenu] = useState<number | null>(null);
   const liveDragPositionsRef = useRef<Record<number, { x: number; y: number }>>({});
+
+  // Block dialog state
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [seatToBlock, setSeatToBlock] = useState<Seat | null>(null);
+  const [blockStartDate, setBlockStartDate] = useState<Date | undefined>(undefined);
+  const [blockEndDate, setBlockEndDate] = useState<Date | undefined>(undefined);
 
   // Form setup
   const form = useForm<InsertSeat>({
@@ -97,7 +106,44 @@ export default function ManageSeats() {
   };
 
   const handleToggleBlock = (seat: Seat) => {
-    updateSeat.mutate({ id: seat.id, isBlocked: !seat.isBlocked });
+    // If seat is currently blocked, unblock it
+    if (seat.isBlocked) {
+      updateSeat.mutate({
+        id: seat.id,
+        isBlocked: false,
+        blockStartDate: null,
+        blockEndDate: null
+      });
+    } else {
+      // Open dialog to set date range
+      setSeatToBlock(seat);
+      setBlockStartDate(undefined);
+      setBlockEndDate(undefined);
+      setBlockDialogOpen(true);
+    }
+  };
+
+  const handleConfirmBlock = () => {
+    if (!seatToBlock) return;
+
+    // Default to today if no dates specified
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const startDate = blockStartDate ? format(blockStartDate, 'yyyy-MM-dd') : today;
+    const endDate = blockEndDate ? format(blockEndDate, 'yyyy-MM-dd') : today;
+
+    updateSeat.mutate({
+      id: seatToBlock.id,
+      isBlocked: true,
+      blockStartDate: startDate,
+      blockEndDate: endDate
+    }, {
+      onSuccess: () => {
+        setBlockDialogOpen(false);
+        setSeatToBlock(null);
+        setBlockStartDate(undefined);
+        setBlockEndDate(undefined);
+      }
+    });
   };
 
   const resetLayout = async () => {
@@ -393,7 +439,7 @@ export default function ManageSeats() {
                       </div>
                       <FormControl>
                         <Switch
-                          checked={field.value}
+                          checked={field.value ?? false}
                           onCheckedChange={field.onChange}
                         />
                       </FormControl>
@@ -408,6 +454,68 @@ export default function ManageSeats() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Block Seat Dialog */}
+      <Dialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block Seat {seatToBlock?.label}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select date range for blocking. If no dates are selected, the seat will be blocked for 1 day (today only).
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Start Date (optional)</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    {blockStartDate ? format(blockStartDate, 'PPP') : 'Select start date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={blockStartDate}
+                    onSelect={setBlockStartDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Date (optional)</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    {blockEndDate ? format(blockEndDate, 'PPP') : 'Select end date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={blockEndDate}
+                    onSelect={setBlockEndDate}
+                    initialFocus
+                    disabled={(date) => blockStartDate ? date < blockStartDate : false}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4">
+              <Button variant="outline" onClick={() => setBlockDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmBlock} disabled={updateSeat.isPending}>
+                {updateSeat.isPending ? 'Blocking...' : 'Block Seat'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-border/50 flex items-center justify-between gap-4">
@@ -462,7 +570,7 @@ export default function ManageSeats() {
                         type="button"
                       >
                         {seat.label}
-                        {(seat.type === SeatType.REGULAR || String(seat.label).startsWith('T')) && (
+                        {seat.type === SeatType.REGULAR && (
                           <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-card/90 px-1 rounded-md border border-border/50">🖥️</div>
                         )}
 
@@ -476,22 +584,46 @@ export default function ManageSeats() {
                         </button>
 
                         {openSeatMenu === seat.id && (
-                          <div className="absolute top-full right-0 mt-1 w-36 bg-card border rounded-md shadow-md z-50" onPointerDown={(e) => e.stopPropagation()}>
-                          <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleToggleBlock(seat)}
-                      title={seat.isBlocked ? "Unblock" : "Block"}
-                    >
-                      <Ban className={`w-4 h-4 ${seat.isBlocked ? 'text-green-600' : 'text-orange-500'}`} />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(seat)}>
-                      <Pencil className="w-4 h-4 text-blue-500" />
-                    </Button>
-										 <Button variant="ghost" size="icon">
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-
+                          <div className="absolute left-full top-0 ml-1 w-auto bg-card border rounded-md shadow-lg z-50 flex gap-1 p-1" onPointerDown={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { handleToggleBlock(seat); setOpenSeatMenu(null); }}
+                              title={seat.isBlocked ? "Unblock" : "Block"}
+                            >
+                              <Ban className={`w-4 h-4 ${seat.isBlocked ? 'text-green-600' : 'text-orange-500'}`} />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => { handleEdit(seat); setOpenSeatMenu(null); }}>
+                              <Pencil className="w-4 h-4 text-blue-500" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Seat?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete seat {seat.label} and remove all associated history.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive"
+                                    onClick={() => {
+                                      deleteSeat.mutate(seat.id);
+                                      setSelectedIds((prev) => prev.filter((id) => id !== seat.id));
+                                      setOpenSeatMenu(null);
+                                    }}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         )}
                       </button>
@@ -519,9 +651,16 @@ export default function ManageSeats() {
                 <TableCell className="capitalize">{seat.type}</TableCell>
                 <TableCell>
                   {seat.isBlocked ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Blocked
-                    </span>
+                    <div className="space-y-1">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Blocked
+                      </span>
+                      {seat.blockStartDate && seat.blockEndDate && (
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(seat.blockStartDate), 'MMM d')} - {format(new Date(seat.blockEndDate), 'MMM d, yyyy')}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Active

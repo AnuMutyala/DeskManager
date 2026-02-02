@@ -24,6 +24,8 @@ export const seats = pgTable("seats", {
   y: integer("y").default(0),
   tags: jsonb("tags").$type<string[]>(), // e.g., ["near window", "monitor"]
   isBlocked: boolean("is_blocked").default(false),
+  blockStartDate: date("block_start_date"),
+  blockEndDate: date("block_end_date"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -22,13 +22,20 @@ export default function Dashboard() {
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, { am: boolean; pm: boolean }>>({});
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
+  // Helper to check if a seat is blocked on a specific date
+  const isSeatBlockedOnDate = (seat: Seat, dateString: string): boolean => {
+    if (seat.blockStartDate && seat.blockEndDate) {
+      return dateString >= seat.blockStartDate && dateString <= seat.blockEndDate;
+    }
+    return seat.isBlocked || false;
+  };
+
   // Fetch workspace-level availability for a range starting at `start` but clamp to booking window
   const fetchAvailabilityRange = async (start: Date, days = 28) => {
     if (!seats) return;
     setCheckingAvailability(true);
     try {
       const result: Record<string, { am: boolean; pm: boolean }> = {};
-      const totalSeats = (seats || []).filter(s => !s.isBlocked).length || 0;
 
       const windowStart = startOfDay(new Date());
       const windowEnd = addDays(windowStart, 30);
@@ -64,11 +71,13 @@ export default function Dashboard() {
         for (let i = 0; i < fetchDays; i++) {
           const d = addDays(fetchStart, i);
           const ds = format(d, 'yyyy-MM-dd');
+          // Count seats that are NOT blocked on this specific date
+          const totalSeatsForDay = (seats || []).filter(s => !isSeatBlockedOnDate(s, ds)).length || 0;
           const amBooked = cached.filter((b: any) => (b.slot === 'AM' || b.slot === 'FULL') && b.date === ds).length;
           const pmBooked = cached.filter((b: any) => (b.slot === 'PM' || b.slot === 'FULL') && b.date === ds).length;
           result[ds] = {
-            am: totalSeats === 0 ? true : amBooked < totalSeats,
-            pm: totalSeats === 0 ? true : pmBooked < totalSeats,
+            am: totalSeatsForDay === 0 ? false : amBooked < totalSeatsForDay,
+            pm: totalSeatsForDay === 0 ? false : pmBooked < totalSeatsForDay,
           };
         }
         setAvailabilityMap(result);
@@ -93,11 +102,13 @@ export default function Dashboard() {
       for (let i = 0; i < fetchDays; i++) {
         const d = addDays(fetchStart, i);
         const ds = format(d, 'yyyy-MM-dd');
+        // Count seats that are NOT blocked on this specific date
+        const totalSeatsForDay = (seats || []).filter(s => !isSeatBlockedOnDate(s, ds)).length || 0;
         const amBooked = bookingsResp.filter((b: any) => (b.slot === 'AM' || b.slot === 'FULL') && b.date === ds).length;
         const pmBooked = bookingsResp.filter((b: any) => (b.slot === 'PM' || b.slot === 'FULL') && b.date === ds).length;
         result[ds] = {
-          am: totalSeats === 0 ? true : amBooked < totalSeats,
-          pm: totalSeats === 0 ? true : pmBooked < totalSeats,
+          am: totalSeatsForDay === 0 ? false : amBooked < totalSeatsForDay,
+          pm: totalSeatsForDay === 0 ? false : pmBooked < totalSeatsForDay,
         };
       }
       setAvailabilityMap(result);
@@ -146,7 +157,10 @@ export default function Dashboard() {
 
   const renderSeatButton = (seat: Seat) => {
     const { status, am, pm } = getSeatStatus(seat.id);
-    const isBlocked = seat.isBlocked;
+    // Check if seat is blocked for the selected date
+    const isBlocked = seat.blockStartDate && seat.blockEndDate
+      ? dateStr >= seat.blockStartDate && dateStr <= seat.blockEndDate
+      : seat.isBlocked || false;
     const seatBookings = (bookings || []).filter(b => b.seatId === seat.id);
     const tooltip = seatBookings.length > 0 ? seatBookings.map(b => `${b.user?.username || 'user'} — ${b.slot}`).join('\n') : undefined;
 

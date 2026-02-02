@@ -132,6 +132,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean> {
+    // Check if seat is blocked on this date
+    const seat = await this.getSeat(seatId);
+    if (!seat) return false;
+
+    // Check if seat has a date-range block
+    if (seat.blockStartDate && seat.blockEndDate) {
+      // Only check if booking date falls within the blocked date range
+      if (date >= seat.blockStartDate && date <= seat.blockEndDate) {
+        return false;
+      }
+    } else if (seat.isBlocked) {
+      // No date range, so it's permanently blocked
+      return false;
+    }
+
     const existing = await db.select().from(bookings).where(
       and(
         eq(bookings.seatId, seatId),
@@ -145,10 +160,9 @@ export class DatabaseStorage implements IStorage {
   async createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences = 1, intervalWeeks = 1, slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
     const { addWeeks, parseISO, format } = await import('date-fns');
 
-    // validate seat
+    // validate seat exists
     const seat = await this.getSeat(seatId);
     if (!seat) return { ok: false, conflicts: [`Seat ${seatId} not found`] };
-    if (seat.isBlocked) return { ok: false, conflicts: [`Seat ${seatId} is blocked`] };
 
     const dates: string[] = [];
     const base = parseISO(startDate);
@@ -177,10 +191,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBookingsForDates(userId: number, seatId: number, dates: string[], slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
-    // validate seat
+    // validate seat exists
     const seat = await this.getSeat(seatId);
     if (!seat) return { ok: false, conflicts: [`Seat ${seatId} not found`] };
-    if (seat.isBlocked) return { ok: false, conflicts: [`Seat ${seatId} is blocked`] };
 
     const conflicts: string[] = [];
     for (const d of dates) {
