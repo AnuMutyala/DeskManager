@@ -1,9 +1,11 @@
 import { useSeats } from "@/hooks/use-seats";
 import { useBookings } from "@/hooks/use-bookings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Armchair, Users, CalendarCheck, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Armchair, Users, CalendarCheck, TrendingUp, Eye } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { format, subDays } from "date-fns";
+import { Link } from "wouter";
 
 export default function AdminDashboard() {
   const { seats } = useSeats();
@@ -42,9 +44,17 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-8 space-y-8 animate-in max-w-7xl mx-auto">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold font-display">Admin Overview</h1>
-        <p className="text-muted-foreground">Monitor workspace usage and occupancy trends</p>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold font-display">Admin Overview</h1>
+          <p className="text-muted-foreground">Monitor workspace usage and occupancy trends</p>
+        </div>
+        <Link href="/admin/bookings">
+          <Button variant="outline">
+            <Eye className="w-4 h-4 mr-2" />
+            View All Bookings
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -66,7 +76,7 @@ export default function AdminDashboard() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748B' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B' }} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     cursor={{ fill: '#F1F5F9' }}
                   />

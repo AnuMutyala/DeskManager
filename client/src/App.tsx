@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import MyBookings from "@/pages/MyBookings";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import ManageSeats from "@/pages/admin/ManageSeats";
+import ViewBookings from "@/pages/admin/ViewBookings";
 import { Loader2 } from "lucide-react";
 
 function PrivateRoute({ component: Component, adminOnly = false }: { component: React.ComponentType<any>, adminOnly?: boolean }) {
@@ -48,7 +49,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Login} />
       <Route path="/login" component={Login} />
-      
+
       {/* Employee Routes */}
       <Route path="/dashboard">
         <PrivateRoute component={Dashboard} />
@@ -63,6 +64,9 @@ function Router() {
       </Route>
       <Route path="/admin/seats">
         <PrivateRoute component={ManageSeats} adminOnly />
+      </Route>
+      <Route path="/admin/bookings">
+        <PrivateRoute component={ViewBookings} adminOnly />
       </Route>
 
       <Route component={NotFound} />

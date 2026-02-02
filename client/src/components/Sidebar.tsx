@@ -6,7 +6,8 @@ import {
   CalendarDays,
   LogOut,
   User,
-  Settings
+  Settings,
+  Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export function Sidebar() {
   const links = [
     { href: isAdmin ? "/admin" : "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     isAdmin && { href: "/admin/seats", icon: Armchair, label: "Manage Seats" },
+    isAdmin && { href: "/admin/bookings", icon: Eye, label: "View Bookings" },
     !isAdmin && { href: "/bookings", icon: CalendarDays, label: "My Bookings" },
   ].filter(Boolean);
 
