@@ -22,9 +22,11 @@ export const api = {
     register: {
       method: 'POST' as const,
       path: '/api/register',
-      input: insertUserSchema,
+      // Use a lightweight validation for registration so very short usernames/passwords are allowed.
+      // The DB still enforces uniqueness; consider enforcing stronger rules in production.
+      input: z.object({ username: z.string().min(1), password: z.string().min(1), role: z.enum(['admin','employee']).optional() }),
       responses: {
-        201: z.custom<typeof users.$inferSelect>(),
+        201: z.object({ user: z.custom<typeof users.$inferSelect>(), token: z.string() }),
         400: errorSchemas.validation,
         409: errorSchemas.conflict,
       },
@@ -37,7 +39,7 @@ export const api = {
         password: z.string(),
       }),
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
+        200: z.object({ token: z.string(), user: z.custom<typeof users.$inferSelect>() }),
         401: errorSchemas.unauthorized,
       },
     },
@@ -97,30 +99,26 @@ export const api = {
     list: {
       method: 'GET' as const,
       path: '/api/bookings',
+      // Accept either a single `date` or a `start`/`end` range (YYYY-MM-DD)
       input: z.object({
-        date: z.string().optional(), // YYYY-MM-DD
+        date: z.string().optional(),
+        start: z.string().optional(),
+        end: z.string().optional(),
         userId: z.string().optional(),
       }).optional(),
       responses: {
         200: z.array(z.custom<typeof bookings.$inferSelect & { seat: typeof seats.$inferSelect; user: typeof users.$inferSelect }>()),
       },
     },
-    create: {
-      method: 'POST' as const,
-      path: '/api/bookings',
-      input: insertBookingSchema,
-      responses: {
-        201: z.custom<typeof bookings.$inferSelect>(),
-        400: errorSchemas.validation,
-        409: errorSchemas.conflict,
-      },
-    },
+    // single create endpoint removed in favor of unified `recurring` API that accepts `dates`.
     recurring: {
       method: 'POST' as const,
       path: '/api/bookings/recurring',
+      // Accept either an explicit `dates` array or recurrence parameters.
       input: z.object({
         seatId: z.number(),
-        startDate: z.string(), // YYYY-MM-DD
+        startDate: z.string().optional(), // YYYY-MM-DD
+        dates: z.array(z.string()).optional(), // explicit dates in YYYY-MM-DD
         occurrences: z.number().min(1).optional(),
         intervalWeeks: z.number().min(1).optional(),
         slot: z.union([z.literal('AM'), z.literal('PM'), z.literal('FULL')])

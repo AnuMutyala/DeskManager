@@ -34,11 +34,12 @@ export function useAuth() {
       return api.auth.login.responses[200].parse(await res.json());
     },
     onSuccess: (data) => {
-      queryClient.setQueryData([api.auth.me.path], data);
-      toast({ title: "Welcome back!", description: `Logged in as ${data.username}` });
-      
+      // store token in a cookie for subsequent requests (fallback)
+      try { document.cookie = `token=${data.token}; path=/`; } catch {}
+      queryClient.setQueryData([api.auth.me.path], data.user);
+      toast({ title: "Welcome back!", description: `Logged in as ${data.user.username}` });
       // Redirect based on role
-      if (data.role === "admin") {
+      if (data.user.role === "admin") {
         setLocation("/admin");
       } else {
         setLocation("/dashboard");
@@ -55,6 +56,7 @@ export function useAuth() {
       if (!res.ok) throw new Error("Logout failed");
     },
     onSuccess: () => {
+      try { document.cookie = 'token=; Max-Age=0; path=/'; } catch {}
       queryClient.setQueryData([api.auth.me.path], null);
       setLocation("/");
       toast({ title: "Logged out", description: "See you next time!" });
@@ -70,8 +72,10 @@ export function useAuth() {
       });
 
       if (!res.ok) {
-        if (res.status === 409) throw new Error("Username already exists");
-        throw new Error("Registration failed");
+        let body: any = undefined;
+        try { body = await res.json(); } catch {}
+        if (res.status === 409) throw new Error(body?.message || "Username already exists");
+        throw new Error(body?.message || "Registration failed");
       }
       return api.auth.register.responses[201].parse(await res.json());
     },

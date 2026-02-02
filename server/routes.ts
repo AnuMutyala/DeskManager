@@ -1,11 +1,10 @@
 import { api } from "@shared/routes";
 import type { Express } from "express";
-import session from "express-session";
 import { promises as fs } from "fs";
 import { type Server } from "http";
-import MemoryStore from "memorystore";
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import cookieParser from "cookie-parser";
 import { z } from "zod";
 import { storage } from "./storage";
 
@@ -13,105 +12,108 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // --- Auth Setup ---
-  const SessionStore = MemoryStore(session);
-  app.use(session({
-    secret: process.env.SESSION_SECRET || "secret",
-    resave: false,
-    saveUninitialized: false,
-    store: new SessionStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
-    }),
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-  }));
+  // --- JWT Auth Setup ---
+  const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret";
 
-  app.use(passport.initialize());
-  app.use(passport.session());
+  // parse cookies so we can optionally accept token via cookie
+  app.use(cookieParser());
 
-  passport.use(new LocalStrategy(async (username, password, done) => {
+  const generateToken = (user: any) => {
+    return jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+  };
+
+  const getTokenFromReq = (req: any) => {
+    const auth = req.headers?.authorization;
+    if (auth && auth.startsWith('Bearer ')) return auth.slice(7);
+    // fallback to cookie 'token' if client sets it
+    return req.cookies?.token;
+  };
+
+  const requireAuth = async (req: any, res: any, next: any) => {
     try {
+      const token = getTokenFromReq(req);
+      if (!token) return res.status(401).json({ message: 'Unauthorized' });
+      const decoded: any = jwt.verify(token, JWT_SECRET);
+      const user = await storage.getUser(decoded.id);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      req.user = user;
+      next();
+    } catch (err) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+  };
+
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    try {
+      await requireAuth(req, res, async () => {
+        if (req.user && req.user.role === 'admin') return next();
+        res.status(403).json({ message: 'Forbidden' });
+      });
+    } catch (err) {
+      res.status(403).json({ message: 'Forbidden' });
+    }
+  };
+
+  // --- Auth Routes (JWT) ---
+  app.post(api.auth.login.path, async (req, res) => {
+    try {
+      const { username, password } = req.body;
       const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return done(null, false, { message: "Incorrect username." });
+      if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+      const matches = (await bcrypt.compare(password, user.password)) || password === user.password;
+      if (!matches) return res.status(401).json({ message: 'Invalid credentials' });
+      // If password was stored in plain text, re-hash it for future safety
+      if (!user.password.startsWith('$2')) {
+        try {
+          const hashed = await bcrypt.hash(password, 10);
+          await storage.updateUser(user.id, { password: hashed } as any);
+          user.password = hashed;
+        } catch (err) {
+          console.warn('Failed to re-hash password on login:', err);
+        }
       }
-      // Simple password check for MVP (in production use hashing!)
-      if (user.password !== password) {
-        return done(null, false, { message: "Incorrect password." });
-      }
-      return done(null, user);
+      const token = generateToken(user);
+      res.json({ token, user });
     } catch (err) {
-      return done(err);
-    }
-  }));
-
-  passport.serializeUser((user: any, done) => {
-    done(null, user.id);
-  });
-
-  passport.deserializeUser(async (id: number, done) => {
-    try {
-      const user = await storage.getUser(id);
-      done(null, user);
-    } catch (err) {
-      done(err);
+      console.error('Login error', err);
+      res.status(500).json({ message: 'Internal Server Error' });
     }
   });
 
-  // --- Auth Routes ---
-  app.post(api.auth.login.path, passport.authenticate("local"), (req, res) => {
+  app.post(api.auth.logout.path, (req, res) => {
+    // Stateless JWT - instruct client to drop token
+    res.sendStatus(200);
+  });
+
+  app.get(api.auth.me.path, requireAuth, (req, res) => {
     res.json(req.user);
-  });
-
-  app.post(api.auth.logout.path, (req, res, next) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
-  });
-
-  app.get(api.auth.me.path, (req, res) => {
-    if (req.isAuthenticated()) {
-      res.json(req.user);
-    } else {
-      res.status(401).json({ message: "Not authenticated" });
-    }
   });
 
   app.post(api.auth.register.path, async (req, res) => {
     try {
+      console.log('Register request body:', req.body);
       const input = api.auth.register.input.parse(req.body);
       const existing = await storage.getUserByUsername(input.username);
       if (existing) {
-        return res.status(409).json({ message: "Username already exists" });
+        return res.status(409).json({ message: 'Username already exists' });
       }
-      const user = await storage.createUser(input);
-      req.login(user, (err) => {
-        if (err) throw err;
-        res.status(201).json(user);
-      });
+      const hashed = await bcrypt.hash(input.password, 10);
+      const user = await storage.createUser({ username: input.username, password: hashed, role: input.role } as any);
+      console.log('Created user:', { id: user.id, username: user.username, role: user.role });
+      const token = generateToken(user);
+      res.status(201).json({ user, token });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
-      throw err;
+      console.error('Register error', err);
+      res.status(500).json({ message: 'Internal Server Error' });
     }
   });
 
   // --- API Routes ---
 
-  // Middleware to check auth
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (req.isAuthenticated()) return next();
-    res.status(401).json({ message: "Unauthorized" });
-  };
-
-  const requireAdmin = (req: any, res: any, next: any) => {
-    if (req.isAuthenticated() && req.user.role === "admin") return next();
-    res.status(403).json({ message: "Forbidden" });
-  };
+  // (moved up) requireAuth and requireAdmin now use JWT
 
   // Seats
   app.get(api.seats.list.path, requireAuth, async (req, res) => {
@@ -193,45 +195,41 @@ export async function registerRoutes(
 
   // Bookings
   app.get(api.bookings.list.path, requireAuth, async (req, res) => {
-    const filters = {
-      date: req.query.date as string,
-      userId: req.query.userId ? parseInt(req.query.userId as string) : undefined
-    };
+    const filters: any = {};
+    if (req.query.date) filters.date = req.query.date as string;
+    if (req.query.start) filters.start = req.query.start as string;
+    if (req.query.end) filters.end = req.query.end as string;
+    if (req.query.userId) filters.userId = parseInt(req.query.userId as string);
     const bookings = await storage.getBookings(filters);
     res.json(bookings);
   });
 
-  app.post(api.bookings.create.path, requireAuth, async (req, res) => {
-    try {
-      const input = api.bookings.create.input.parse(req.body);
-
-      // Check availability
-      const isAvailable = await storage.isSeatAvailable(input.seatId, input.date, input.slot);
-      if (!isAvailable) {
-        return res.status(409).json({ message: "Seat already booked for this slot" });
-      }
-
-      // Check seat blockage
-      const seat = await storage.getSeat(input.seatId);
-      if (seat?.isBlocked) {
-        return res.status(409).json({ message: "Seat is blocked" });
-      }
-
-      const booking = await storage.createBooking({ ...input, userId: req.user.id });
-      res.status(201).json(booking);
-    } catch (err) {
-       if (err instanceof z.ZodError) {
-        res.status(400).json({ message: err.errors[0].message });
-      } else {
-        res.status(500).json({ message: "Internal Server Error" });
-      }
-    }
-  });
+  // Single booking create route removed; use `/api/bookings/recurring` with an explicit `dates` array instead.
 
   // Recurring bookings endpoint
   app.post(api.bookings.recurring.path, requireAuth, async (req, res) => {
     try {
+      console.log('=== RECURRING BOOKING DEBUG ===');
+      console.log('Raw request body:', req.body);
+      console.log('Body keys:', Object.keys(req.body || {}));
+      console.log('User ID:', req.user?.id);
+      console.log('seatId:', req.body?.seatId, 'type:', typeof req.body?.seatId);
+      console.log('dates:', req.body?.dates);
+      console.log('slot:', req.body?.slot);
+      console.log('==============================');
+
       const input = api.bookings.recurring.input.parse(req.body);
+      console.log('Parsed input successfully:', input);
+
+      if (input.dates && Array.isArray(input.dates) && input.dates.length > 0) {
+        const result = await storage.createBookingsForDates(req.user.id, input.seatId, input.dates, input.slot);
+        if (!result.ok) {
+          return res.status(409).json({ message: 'One or more dates are unavailable', conflicts: result.conflicts });
+        }
+        return res.status(201).json(result.bookings);
+      }
+        // Single booking create route removed; use `/api/bookings/recurring` with an explicit `dates` array instead.
+
       const occurrences = input.occurrences ?? 1;
       const intervalWeeks = input.intervalWeeks ?? 1;
 
@@ -244,7 +242,15 @@ export async function registerRoutes(
       res.status(201).json(result.bookings);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
+        console.error('=== ZOD VALIDATION ERROR ===');
+        console.error('Full error:', JSON.stringify(err, null, 2));
+        console.error('Error issues:', err.issues);
+        console.error('===========================');
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+          errors: err.errors
+        });
       }
       console.error('Recurring booking error:', err);
       res.status(500).json({ message: 'Internal Server Error' });
@@ -278,8 +284,10 @@ async function seedDatabase() {
     console.log("Seeding database...");
 
     // Create Users
-    await storage.createUser({ username: "admin", password: "password", role: "admin" });
-    await storage.createUser({ username: "employee", password: "password", role: "employee" });
+    const adminPass = await bcrypt.hash("password", 10);
+    const empPass = await bcrypt.hash("password", 10);
+    await storage.createUser({ username: "admin", password: adminPass, role: "admin" });
+    await storage.createUser({ username: "employee", password: empPass, role: "employee" });
 
     // Create Seats (Sample from the image labels)
     const seatLabels = [

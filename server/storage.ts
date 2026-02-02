@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { 
+import {
   users, seats, bookings,
   type User, type InsertUser,
   type Seat, type InsertSeat,
@@ -12,24 +12,26 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
+
   // Seat
   getSeats(): Promise<Seat[]>;
   getSeat(id: number): Promise<Seat | undefined>;
   createSeat(seat: InsertSeat): Promise<Seat>;
   updateSeat(id: number, seat: Partial<InsertSeat>): Promise<Seat>;
   deleteSeat(id: number): Promise<void>;
-  
+
   // Booking
-  getBookings(filters?: { date?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]>;
+  getBookings(filters?: { date?: string; start?: string; end?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]>;
   getBooking(id: number): Promise<Booking | undefined>;
-  createBooking(booking: InsertBooking): Promise<Booking>;
   deleteBooking(id: number): Promise<void>;
-  
+
   // Custom checks
   isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean>;
   // Create recurring bookings. Returns {ok:true, bookings} on success or {ok:false, conflicts}
   createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences?: number, intervalWeeks?: number, slot?: string): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }>;
+  // Create bookings for an explicit list of dates
+  createBookingsForDates(userId: number, seatId: number, dates: string[], slot?: string): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -46,6 +48,11 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: number, userUpdate: Partial<InsertUser>): Promise<User> {
+    const [user] = await db.update(users).set(userUpdate).where(eq(users.id, id)).returning();
     return user;
   }
 
@@ -74,39 +81,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Booking
-  async getBookings(filters?: { date?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]> {
+  async getBookings(filters?: { date?: string; start?: string; end?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]> {
     let query = db.select().from(bookings)
       .leftJoin(seats, eq(bookings.seatId, seats.id))
       .leftJoin(users, eq(bookings.userId, users.id));
 
+    const conditions: any[] = [];
     if (filters?.date) {
-      query = query.where(eq(bookings.date, filters.date)) as any;
+      conditions.push(eq(bookings.date, filters.date));
     }
-    
+    if (filters?.start) {
+      conditions.push(gte(bookings.date, filters.start));
+    }
+    if (filters?.end) {
+      conditions.push(lte(bookings.date, filters.end));
+    }
     if (filters?.userId) {
-      // If we already have a where clause, we need to use 'and', but simpler to just chain if supported or check.
-      // Drizzle 'where' replaces previous where. Need 'and' for multiple conditions.
-      // Let's rewrite slightly for safety.
-      const conditions = [];
-      if (filters.date) conditions.push(eq(bookings.date, filters.date));
-      if (filters.userId) conditions.push(eq(bookings.userId, filters.userId));
-      
-      if (conditions.length > 0) {
-        // @ts-ignore - complex type inference
-        query = query.where(and(...conditions));
-      }
+      conditions.push(eq(bookings.userId, filters.userId));
+    }
+
+    if (conditions.length > 0) {
+      // @ts-ignore - complex type inference with drizzle
+      query = query.where(and(...conditions));
     }
 
     const result = await query;
-    // Map result to simpler structure if needed, or return joined result. 
+    // Map result to simpler structure if needed, or return joined result.
     // The type signature expects (Booking & { seat: Seat; user: User }).
     // The result from join is { bookings: Booking, seats: Seat, users: User }
-    
-    return result.map(row => ({
-      ...row.bookings!,
-      seat: row.seats!,
-      user: row.users!
-    }));
+
+    return result.map(row => {
+      const { password, ...userWithoutPassword } = row.users!;
+      return {
+        ...row.bookings!,
+        seat: row.seats!,
+        user: userWithoutPassword
+      };
+    });
   }
 
   async getBooking(id: number): Promise<Booking | undefined> {
@@ -114,10 +125,7 @@ export class DatabaseStorage implements IStorage {
     return booking;
   }
 
-  async createBooking(insertBooking: InsertBooking): Promise<Booking> {
-    const [booking] = await db.insert(bookings).values(insertBooking).returning();
-    return booking;
-  }
+  // single-create removed in favor of `createBookingsForDates`
 
   async deleteBooking(id: number): Promise<void> {
     await db.delete(bookings).where(eq(bookings.id, id));
@@ -158,6 +166,29 @@ export class DatabaseStorage implements IStorage {
     if (conflicts.length > 0) {
       return { ok: false, conflicts };
     }
+
+    const created: Booking[] = [];
+    for (const d of dates) {
+      const [booking] = await db.insert(bookings).values({ userId, seatId, date: d, slot }).returning();
+      created.push(booking);
+    }
+
+    return { ok: true, bookings: created };
+  }
+
+  async createBookingsForDates(userId: number, seatId: number, dates: string[], slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
+    // validate seat
+    const seat = await this.getSeat(seatId);
+    if (!seat) return { ok: false, conflicts: [`Seat ${seatId} not found`] };
+    if (seat.isBlocked) return { ok: false, conflicts: [`Seat ${seatId} is blocked`] };
+
+    const conflicts: string[] = [];
+    for (const d of dates) {
+      const available = await this.isSeatAvailable(seatId, d, slot);
+      if (!available) conflicts.push(d);
+    }
+
+    if (conflicts.length > 0) return { ok: false, conflicts };
 
     const created: Booking[] = [];
     for (const d of dates) {
