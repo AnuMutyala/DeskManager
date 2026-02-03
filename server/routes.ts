@@ -238,7 +238,7 @@ export async function registerRoutes(
       console.log('Parsed input successfully:', input);
 
       if (input.dates && Array.isArray(input.dates) && input.dates.length > 0) {
-        const result = await storage.createBookingsForDates(req.user.id, input.seatId, input.dates, input.slot);
+        const result = await storage.createBookingsForDates(req.user!.id, input.seatId, input.dates, input.slot);
         if (!result.ok) {
           return res.status(409).json({ message: 'One or more dates are unavailable', conflicts: result.conflicts });
         }
@@ -280,7 +280,7 @@ export async function registerRoutes(
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     // Allow user to delete their own booking, or admin to delete any
-    if (booking.userId !== req.user.id && req.user.role !== "admin") {
+    if (booking.userId !== req.user!.id && req.user!.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 

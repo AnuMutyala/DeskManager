@@ -501,7 +501,7 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
           <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl font-display">
             <Armchair className="w-6 h-6 text-primary" />
-            Book Seat {seat.label} {seat.type === SeatType.REGULAR ? 'with 🖥️' : 'without 🖥️'}
+            Book Seat {seat.label} {seat.type === SeatType.REGULAR ? ' with 🖥️' : ' without  🖥️'}
           </DialogTitle>
           <DialogDescription>
             {format(selectedDate, "EEEE, MMMM do, yyyy")}

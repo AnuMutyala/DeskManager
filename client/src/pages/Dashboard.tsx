@@ -288,13 +288,16 @@ export default function Dashboard() {
       <Card className="p-12 min-h-[700px] relative overflow-auto bg-white border-border/50">
 			 <div className="absolute top-4 right-4 flex gap-4 text-xs font-medium bg-card p-3 rounded-lg border shadow-sm z-10">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" /> Available
+						<div className="w-3 h-3 rounded-sm border-2 border-green-500 bg-white mr-2" /> Available
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500" /> Half Day available
+            <div className="w-3 h-3 rounded-sm border-2 border-amber-500 bg-white mr-2" /> Half Day available
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-slate-200 border" /> Booked
+            <div className="w-3 h-3 rounded-sm border-2 border-slate-200 bg-slate-200 mr-2" /> Booked
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm border-2 border-red-500 border bg-red-50 mr-2" /> Blocked
           </div>
         </div>
         <div className="relative min-h-[700px] min-w-[900px]">
