@@ -9,6 +9,5 @@ coverage/
 .env
 .env.local
 .env.development
-script/
 .elasticbeanstalk/
 
