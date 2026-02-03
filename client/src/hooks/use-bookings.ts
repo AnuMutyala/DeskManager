@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type InsertBooking } from "@shared/routes";
+import { api, buildUrl } from "@shared/routes";
+import type { InsertBooking } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export function useBookings(filters?: { date?: string; userId?: string }) {
@@ -65,6 +66,14 @@ export function useBookings(filters?: { date?: string; userId?: string }) {
     onSettled: () => {
       // ensure queries are fresh
       queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
+      // Clear global availability cache so other components refetch
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (window.__availabilityFetchedRanges) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        window.__availabilityFetchedRanges = {};
+      }
       toast({ title: "Success", description: "Booking confirmed!" });
     },
   });
@@ -80,6 +89,14 @@ export function useBookings(filters?: { date?: string; userId?: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
+      // Clear global availability cache so other components refetch
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (window.__availabilityFetchedRanges) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        window.__availabilityFetchedRanges = {};
+      }
       toast({ title: "Cancelled", description: "Booking cancelled successfully" });
     },
   });

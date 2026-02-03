@@ -1,11 +1,15 @@
-import { db } from "./db";
-import { eq, and, gte, lte } from "drizzle-orm";
 import {
-  users, seats, bookings,
-  type User, type InsertUser,
-  type Seat, type InsertSeat,
-  type Booking, type InsertBooking
+	bookings,
+	seats,
+	users,
+	type Booking,
+	type InsertSeat,
+	type InsertUser,
+	type Seat,
+	type User
 } from "@shared/schema";
+import { and, desc,asc, eq, gte, lte } from "drizzle-orm";
+import { db } from "./db";
 
 export interface IStorage {
   // User
@@ -67,12 +71,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSeat(insertSeat: InsertSeat): Promise<Seat> {
-    const [seat] = await db.insert(seats).values(insertSeat).returning();
+    const [seat] = await db.insert(seats).values(insertSeat as any).returning();
     return seat;
   }
 
   async updateSeat(id: number, seatUpdate: Partial<InsertSeat>): Promise<Seat> {
-    const [seat] = await db.update(seats).set(seatUpdate).where(eq(seats.id, id)).returning();
+    const [seat] = await db.update(seats).set(seatUpdate as any).where(eq(seats.id, id)).returning();
     return seat;
   }
 
@@ -82,9 +86,13 @@ export class DatabaseStorage implements IStorage {
 
   // Booking
   async getBookings(filters?: { date?: string; start?: string; end?: string; userId?: number }): Promise<(Booking & { seat: Seat; user: User })[]> {
-    let query = db.select().from(bookings)
-      .leftJoin(seats, eq(bookings.seatId, seats.id))
-      .leftJoin(users, eq(bookings.userId, users.id));
+
+		let query = db
+    .select()
+    .from(bookings)
+    .leftJoin(seats, eq(bookings.seatId, seats.id))
+    .leftJoin(users, eq(bookings.userId, users.id))
+    .orderBy(desc(bookings.createdAt)); // ← maps to created_at
 
     const conditions: any[] = [];
     if (filters?.date) {
@@ -115,9 +123,9 @@ export class DatabaseStorage implements IStorage {
       return {
         ...row.bookings!,
         seat: row.seats!,
-        user: userWithoutPassword
+        user: userWithoutPassword as any
       };
-    });
+    }) as any;
   }
 
   async getBooking(id: number): Promise<Booking | undefined> {
@@ -131,7 +139,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(bookings).where(eq(bookings.id, id));
   }
 
-  async isSeatAvailable(seatId: number, date: string, slot: string): Promise<boolean> {
+  async isSeatAvailable(seatId: number, date: string, slot: "AM" | "PM" | "FULL"): Promise<boolean> {
     // Check if seat is blocked on this date
     const seat = await this.getSeat(seatId);
     if (!seat) return false;
@@ -147,17 +155,28 @@ export class DatabaseStorage implements IStorage {
       return false;
     }
 
+    // Get all existing bookings for this seat and date
     const existing = await db.select().from(bookings).where(
       and(
         eq(bookings.seatId, seatId),
-        eq(bookings.date, date),
-        eq(bookings.slot, slot)
+        eq(bookings.date, date)
       )
     );
-    return existing.length === 0;
+
+    // If requesting FULL day, check if either AM, PM, or FULL is already booked
+    if (slot === 'FULL') {
+      return existing.length === 0;
+    }
+
+    // For AM or PM, check if that specific slot or FULL is booked
+    const hasConflict = existing.some(b =>
+      b.slot === slot || b.slot === 'FULL'
+    );
+
+    return !hasConflict;
   }
 
-  async createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences = 1, intervalWeeks = 1, slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
+  async createRecurringBookings(userId: number, seatId: number, startDate: string, occurrences = 1, intervalWeeks = 1, slot: "AM" | "PM" | "FULL" = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
     const { addWeeks, parseISO, format } = await import('date-fns');
 
     // validate seat exists
@@ -190,7 +209,7 @@ export class DatabaseStorage implements IStorage {
     return { ok: true, bookings: created };
   }
 
-  async createBookingsForDates(userId: number, seatId: number, dates: string[], slot = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
+  async createBookingsForDates(userId: number, seatId: number, dates: string[], slot: "AM" | "PM" | "FULL" = 'AM'): Promise<{ ok: true; bookings: Booking[] } | { ok: false; conflicts: string[] }> {
     // validate seat exists
     const seat = await this.getSeat(seatId);
     if (!seat) return { ok: false, conflicts: [`Seat ${seatId} not found`] };

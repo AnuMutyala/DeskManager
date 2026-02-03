@@ -24,7 +24,7 @@ export default function ViewBookings() {
       b.seat?.label || '',
       b.date,
       b.slot,
-      format(new Date(b.createdAt), 'yyyy-MM-dd HH:mm:ss')
+      b.createdAt ? format(new Date(b.createdAt), 'yyyy-MM-dd HH:mm:ss') : ''
     ]);
 
     const csvContent = [
@@ -125,7 +125,7 @@ export default function ViewBookings() {
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {format(new Date(booking.createdAt), 'MMM dd, HH:mm')}
+                      {booking.createdAt ? format(new Date(booking.createdAt), 'MMM dd, HH:mm') : 'N/A'}
                     </TableCell>
                     <TableCell className="text-right">
                       <AlertDialog>

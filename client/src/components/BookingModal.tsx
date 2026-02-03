@@ -54,6 +54,7 @@ export function BookingModal({ seat, date, existingBookings, onClose }: BookingM
   const isFullUnavailable = isAmBooked || isPmBooked;
 
   const handleBook = (slot: "AM" | "PM" | "FULL") => {
+    if (!seat || !user) return;
     const bookingData: InsertBooking = {
       seatId: seat.id,
       userId: user.id,
@@ -213,6 +214,7 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
         const created = await res.json();
         toast({ title: 'Booked', description: `Created ${created.length} bookings` });
         queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
+        onClose(); // Close the booking modal after successful booking
         return;
       }
 
@@ -255,6 +257,62 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
     setConflictDialog({ open: false, conflicts: [], availableDates: [], slot: null });
 
     try {
+      // If FULL day was requested, we need to check each conflicted date
+      // and book whatever slot is available (AM, PM, or skip if both are taken)
+      if (conflictDialog.slot === 'FULL') {
+        const bookingsToMake: Array<{ dates: string[]; slot: 'AM' | 'PM' | "FULL" }> = [];
+        const amDates: string[] = [];
+        const pmDates: string[] = [];
+
+        // For conflicted dates, check which slot is available
+        for (const date of conflictDialog.conflicts) {
+          const avail = availability[date];
+          if (avail) {
+            if (avail.am && !avail.pm) amDates.push(date);
+            else if (!avail.am && avail.pm) pmDates.push(date);
+            // If neither available, skip this date entirely
+          }
+        }
+
+        // Book available dates with FULL
+        if (conflictDialog.availableDates.length > 0) {
+          bookingsToMake.push({ dates: conflictDialog.availableDates, slot: 'FULL' });
+        }
+
+        // Book partial dates with available slot
+        if (amDates.length > 0) {
+          bookingsToMake.push({ dates: amDates, slot: 'AM' });
+        }
+        if (pmDates.length > 0) {
+          bookingsToMake.push({ dates: pmDates, slot: 'PM' });
+        }
+
+        // Make all booking requests
+        let totalCreated = 0;
+        for (const booking of bookingsToMake) {
+          const res = await fetch(api.bookings.recurring.path, {
+            method: api.bookings.recurring.method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seatId: seat.id, ...booking }),
+            credentials: 'include',
+          });
+
+          if (res.status === 201) {
+            const created = await res.json();
+            totalCreated += created.length;
+          }
+        }
+
+        toast({
+          title: 'Booked',
+          description: `Created ${totalCreated} bookings (some dates booked partially based on availability)`
+        });
+        queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
+        onClose(); // Close the booking modal after successful booking
+        return;
+      }
+
+      // For non-FULL bookings, just book the available dates
       const payload = {
         seatId: seat.id,
         dates: conflictDialog.availableDates,
@@ -272,6 +330,7 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
         const created = await res.json();
         toast({ title: 'Booked', description: `Created ${created.length} bookings (${conflictDialog.conflicts.length} dates were skipped)` });
         queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
+        onClose(); // Close the booking modal after successful booking
         return;
       }
 
@@ -311,13 +370,13 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
         </button>
         {(
           // show dots if date is not before today and we have availability info or fallback bookings
-          !isBefore(startOfDay(date), startOfDay(new Date())) && (a || existingBookings.some((b: any) => b.seatId === seat.id))
+          !isBefore(startOfDay(date), startOfDay(new Date())) && (a || existingBookings.some((b: any) => b.seatId === seat?.id))
         ) && (
           <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 flex gap-0.5">
             {
               // determine AM availability: prefer fetched data, else fallback to existingBookings
               (() => {
-                const amAvailable = a ? a.am : !existingBookings.some((b: any) => b.seatId === seat.id && b.date === ds && (b.slot === 'AM' || b.slot === 'FULL'));
+                const amAvailable = a ? a.am : !existingBookings.some((b: any) => b.seatId === seat?.id && b.date === ds && (b.slot === 'AM' || b.slot === 'FULL'));
                 return (
                   <span className={`${amAvailable ? 'w-2 h-2 rounded-full bg-green-500 ring-1 ring-white/60' : 'w-2 h-2 rounded-full bg-amber-500'}`} />
                 );
@@ -325,7 +384,7 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
             }
             {
               (() => {
-                const pmAvailable = a ? a.pm : !existingBookings.some((b: any) => b.seatId === seat.id && b.date === ds && (b.slot === 'PM' || b.slot === 'FULL'));
+                const pmAvailable = a ? a.pm : !existingBookings.some((b: any) => b.seatId === seat?.id && b.date === ds && (b.slot === 'PM' || b.slot === 'FULL'));
                 return (
                   <span className={`${pmAvailable ? 'w-2 h-2 rounded-full bg-green-500 ring-1 ring-white/60' : 'w-2 h-2 rounded-full bg-amber-500'}`} />
                 );
@@ -357,12 +416,12 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
           <span className="pointer-events-none select-none text-sm">{String(date.getDate())}</span>
         </button>
         {(
-          !isBefore(startOfDay(date), startOfDay(new Date())) && (a || existingBookings.some((b: any) => b.seatId === seat.id))
+          !isBefore(startOfDay(date), startOfDay(new Date())) && (a || existingBookings.some((b: any) => b.seatId === seat?.id))
         ) && (
           <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 flex gap-0.5">
             {
               (() => {
-                const amAvailable = a ? a.am : !existingBookings.some((b: any) => b.seatId === seat.id && b.date === ds && (b.slot === 'AM' || b.slot === 'FULL'));
+                const amAvailable = a ? a.am : !existingBookings.some((b: any) => b.seatId === seat?.id && b.date === ds && (b.slot === 'AM' || b.slot === 'FULL'));
                 return (
                   <span className={`${amAvailable ? 'w-2 h-2 rounded-full bg-green-500 ring-1 ring-white/60' : 'w-2 h-2 rounded-full bg-amber-500'}`} />
                 );
@@ -370,7 +429,7 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
             }
             {
               (() => {
-                const pmAvailable = a ? a.pm : !existingBookings.some((b: any) => b.seatId === seat.id && b.date === ds && (b.slot === 'PM' || b.slot === 'FULL'));
+                const pmAvailable = a ? a.pm : !existingBookings.some((b: any) => b.seatId === seat?.id && b.date === ds && (b.slot === 'PM' || b.slot === 'FULL'));
                 return (
                   <span className={`${pmAvailable ? 'w-2 h-2 rounded-full bg-green-500 ring-1 ring-white/60' : 'w-2 h-2 rounded-full bg-amber-500'}`} />
                 );
@@ -384,11 +443,19 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
 
   // Keep modal selected date in sync with parent `date` (dashboard selected date)
   useEffect(() => {
+    if (!seat) return;
+
     setSelectedDate(date ?? new Date());
     // Reset per-seat recurrence state so selections don't carry across seats
     setEndDate(null);
     setRecurrencePattern('none');
     setSelectedSlot(null);
+
+    // Clear the global cache to force fresh data fetch
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    window.__availabilityFetchedRanges = {};
+
     // Prefetch availability for the full 31-day booking window (today + 30 days)
     // to match Dashboard's fetch range and use the same cache key
     const windowStart = startOfDay(new Date());
@@ -410,6 +477,19 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
     if (recurrencePattern === 'none') return;
     const dates = computeDates();
     const toFetch = recurrencePattern === 'weekly' ? dates.slice(0, 5) : dates.slice(0, 5);
+
+    // Force refresh by clearing cache for these specific dates
+    const start = format(toFetch[0], 'yyyy-MM-dd');
+    const end = format(toFetch[toFetch.length - 1], 'yyyy-MM-dd');
+    const key = `${start}|${end}`;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    if (window.__availabilityFetchedRanges && window.__availabilityFetchedRanges[key]) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      delete window.__availabilityFetchedRanges[key];
+    }
+
     fetchAvailabilityForDates(toFetch);
   }, [recurrencePattern, selectedSlot, selectedDate, endDate, weeks, seat]);
 
@@ -602,19 +682,38 @@ const handleBookRecurring = async (slot: "AM" | "PM" | "FULL", skipConflicted = 
           <AlertDialogHeader>
             <AlertDialogTitle>Some dates are unavailable</AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
-              <p>The following dates are already booked:</p>
-              <div className="bg-red-50 border border-red-200 rounded p-2 text-sm">
-                {conflictDialog.conflicts.map(d => format(new Date(d), 'EEE, MMM do')).join(', ')}
-              </div>
-              <p className="pt-2">
-                Would you like to continue booking the remaining <strong>{conflictDialog.availableDates.length}</strong> available dates?
-              </p>
+              {conflictDialog.slot === 'FULL' ? (
+                <>
+                  <p>Some dates have partial or full conflicts:</p>
+                  <div className="bg-red-50 border border-red-200 rounded p-2 text-sm">
+                    {conflictDialog.conflicts.map(d => format(new Date(d), 'EEE, MMM do')).join(', ')}
+                  </div>
+                  <p className="pt-2">
+                    Would you like to continue? Available slots will be booked automatically:
+                  </p>
+                  <ul className="text-sm list-disc pl-5 space-y-1">
+                    <li><strong>{conflictDialog.availableDates.length}</strong> dates with full day available</li>
+                    <li>Partial bookings (AM or PM) for dates with one slot available</li>
+                    <li>Dates with both slots taken will be skipped</li>
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <p>The following dates are already booked:</p>
+                  <div className="bg-red-50 border border-red-200 rounded p-2 text-sm">
+                    {conflictDialog.conflicts.map(d => format(new Date(d), 'EEE, MMM do')).join(', ')}
+                  </div>
+                  <p className="pt-2">
+                    Would you like to continue booking the remaining <strong>{conflictDialog.availableDates.length}</strong> available dates?
+                  </p>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleContinueWithAvailable}>
-              Continue with {conflictDialog.availableDates.length} dates
+              {conflictDialog.slot === 'FULL' ? 'Continue with available slots' : `Continue with ${conflictDialog.availableDates.length} dates`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

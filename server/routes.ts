@@ -1,12 +1,25 @@
 import { api } from "@shared/routes";
+import bcrypt from "bcryptjs";
+import cookieParser from "cookie-parser";
 import type { Express } from "express";
 import { promises as fs } from "fs";
 import { type Server } from "http";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-import cookieParser from "cookie-parser";
 import { z } from "zod";
 import { storage } from "./storage";
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: number;
+        username: string;
+        role: "admin" | "employee";
+      };
+    }
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -170,9 +183,12 @@ export async function registerRoutes(
 
   app.put(api.seats.update.path, requireAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      console.log("Update seat request body:", JSON.stringify(req.body, null, 2));
       const input = api.seats.update.input.parse(req.body);
+      console.log("Parsed input:", JSON.stringify(input, null, 2));
       const seat = await storage.updateSeat(id, input);
+      console.log("Updated seat:", JSON.stringify(seat, null, 2));
       if (!seat) return res.status(404).json({ message: "Seat not found" });
       res.json(seat);
     } catch (err) {
@@ -188,7 +204,7 @@ export async function registerRoutes(
   });
 
   app.delete(api.seats.delete.path, requireAdmin, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     await storage.deleteSeat(id);
     res.sendStatus(200);
   });
@@ -233,7 +249,7 @@ export async function registerRoutes(
       const occurrences = input.occurrences ?? 1;
       const intervalWeeks = input.intervalWeeks ?? 1;
 
-      const result = await storage.createRecurringBookings(req.user.id, input.seatId, input.startDate, occurrences, intervalWeeks, input.slot);
+      const result = await storage.createRecurringBookings(req.user!.id, input.seatId, input.startDate || '', occurrences, intervalWeeks, input.slot);
 
       if (!result.ok) {
         return res.status(409).json({ message: 'One or more dates are unavailable', conflicts: result.conflicts });
@@ -258,7 +274,7 @@ export async function registerRoutes(
   });
 
   app.delete(api.bookings.cancel.path, requireAuth, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     const booking = await storage.getBooking(id);
 
     if (!booking) return res.status(404).json({ message: "Booking not found" });
