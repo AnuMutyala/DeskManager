@@ -382,7 +382,6 @@ NODE_ENV=development
 ## Future Enhancements
 
 Potential areas for expansion:
-- filter by date inM
 - Email notifications for booking confirmations
 - Calendar integration (Google Calendar, Outlook)
 - Mobile app version
