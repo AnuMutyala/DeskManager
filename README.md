@@ -160,12 +160,16 @@ npm run build && eb deploy --message "Fix: description"
 - **Frontend:** React + Vite (served from `/`)
 - **Backend API:** Express (routes under `/api/*`)
 - **Database:** PostgreSQL on AWS RDS
+- **CDN:** CloudFront for HTTPS and global distribution
 - **Deployment:** Single-origin architecture (frontend served by backend)
 
 ### URLs
 
-- **Production:** http://deskmanager-prod.eba-vd4dw3mi.ap-southeast-1.elasticbeanstalk.com
+- **Production (HTTPS):** https://d2rxrqeh0g51rg.cloudfront.net
+- **Direct EB (HTTP):** http://deskmanager-prod.eba-vd4dw3mi.ap-southeast-1.elasticbeanstalk.com
 - **API Endpoint:** Same domain at `/api/*`
+
+**Note:** Use the CloudFront URL for HTTPS access and better global performance.
 
 ### Version Tracking
 
