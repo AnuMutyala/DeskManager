@@ -1,40 +1,82 @@
-import { useBookings } from "@/hooks/use-bookings";
-import { useAuth } from "@/hooks/use-auth";
-import { format, parseISO, isFuture } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, Armchair, Trash2, AlertCircle } from "lucide-react";
+import { Calendar } from "@/components/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/popover";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
+import { useBookings } from "@/hooks/use-bookings";
+import { format, isFuture, parseISO } from "date-fns";
+import { Armchair, CalendarDays, Clock, Trash2, X } from "lucide-react";
+import { useState } from "react";
 
 export default function MyBookings() {
   const { user } = useAuth();
+  const [filterDate, setFilterDate] = useState<Date | null>(null);
   const { bookings, isLoading, cancelBooking } = useBookings({ userId: String(user?.id) });
 
-  if (isLoading) return null;
+  if (isLoading || !user) return null;
 
   const sortedBookings = bookings?.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
-  const upcoming = sortedBookings.filter(b => isFuture(parseISO(b.date)) || b.date === format(new Date(), 'yyyy-MM-dd'));
-  const past = sortedBookings.filter(b => !isFuture(parseISO(b.date)) && b.date !== format(new Date(), 'yyyy-MM-dd'));
+
+  // Apply date filter if selected
+  const filteredBookings = filterDate
+    ? sortedBookings.filter(b => b.date === format(filterDate, 'yyyy-MM-dd'))
+    : sortedBookings;
+
+  const upcoming = filteredBookings.filter(b => isFuture(parseISO(b.date)) || b.date === format(new Date(), 'yyyy-MM-dd'));
+  const past = filteredBookings.filter(b => !isFuture(parseISO(b.date)) && b.date !== format(new Date(), 'yyyy-MM-dd'));
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-primary/10 rounded-xl">
-          <CalendarDays className="w-8 h-8 text-primary" />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-primary/10 rounded-xl">
+            <CalendarDays className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold font-display">My Bookings</h1>
+            <p className="text-muted-foreground">Manage your upcoming workspace reservations</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-bold font-display">My Bookings</h1>
-          <p className="text-muted-foreground">Manage your upcoming workspace reservations</p>
+
+        {/* Date Filter */}
+        <div className="flex items-center gap-2">
+          {filterDate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFilterDate(null)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Clear filter
+            </Button>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <CalendarDays className="w-4 h-4" />
+                {filterDate ? format(filterDate, 'MMM do, yyyy') : 'Filter by date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <Calendar
+                mode="single"
+                selected={filterDate ?? undefined}
+                onSelect={(date: Date | undefined) => setFilterDate(date ?? null)}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -42,13 +84,13 @@ export default function MyBookings() {
         <h2 className="text-lg font-semibold flex items-center gap-2">
           Upcoming ({upcoming.length})
         </h2>
-        
+
         {upcoming.length === 0 ? (
           <Card className="border-dashed border-2 bg-secondary/20">
             <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Armchair className="w-12 h-12 mb-4 opacity-20" />
               <p>No upcoming bookings found.</p>
-              <Button variant="link" asChild className="mt-2">
+              <Button variant="outline" asChild className="mt-2">
                 <a href="/dashboard">Book a seat now</a>
               </Button>
             </CardContent>
@@ -63,11 +105,11 @@ export default function MyBookings() {
                       <CalendarDays className="w-4 h-4" />
                       {format(parseISO(booking.date), "EEEE, MMMM do, yyyy")}
                     </div>
-                    
+
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        {booking.slot === 'AM' ? 'Morning (08:00 - 13:00)' : 
+                        {booking.slot === 'AM' ? 'Morning (08:00 - 13:00)' :
                          booking.slot === 'PM' ? 'Afternoon (13:00 - 18:00)' : 'Full Day'}
                       </div>
                     </div>
@@ -97,7 +139,7 @@ export default function MyBookings() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Keep Booking</AlertDialogCancel>
-                        <AlertDialogAction 
+                        <AlertDialogAction
                           onClick={() => cancelBooking.mutate(booking.id)}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
