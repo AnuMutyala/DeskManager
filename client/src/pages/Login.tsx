@@ -115,6 +115,10 @@ export default function Login() {
             </Tabs>
           </CardContent>
         </Card>
+
+        <div className="mt-4 text-center text-xs text-muted-foreground">
+          Version: {__GIT_HASH__}
+        </div>
       </div>
     </div>
   );

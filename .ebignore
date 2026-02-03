@@ -1,0 +1,14 @@
+node_modules/
+.git/
+client/
+*.log
+.DS_Store
+.vscode/
+.idea/
+coverage/
+.env
+.env.local
+.env.development
+script/
+.elasticbeanstalk/
+

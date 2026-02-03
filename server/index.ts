@@ -94,7 +94,10 @@ app.use((req, res, next) => {
   const reusePort = process.platform === "linux";
 
   if (!reusePort) {
-    log("reusePort disabled on this platform; binding without reusePort", "server");
+    log(
+      "reusePort disabled on this platform; binding without reusePort",
+      "server",
+    );
   }
 
   const listenOptions: any = { port, host };
