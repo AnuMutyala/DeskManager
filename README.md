@@ -325,8 +325,8 @@ NODE_ENV=development
 
 **Time Slots**:
 - **AM**: Morning shift (9 AM - 1 PM)
-- **PM**: Afternoon shift (1 PM - 5 PM)
-- **FULL**: Full day (9 AM - 5 PM)
+- **PM**: Afternoon shift (1 PM - 6 PM)
+- **FULL**: Full day (9 AM - 6 PM)
 
 **Conflict Resolution**:
 1. When a FULL day booking is requested, the system checks both AM and PM availability
