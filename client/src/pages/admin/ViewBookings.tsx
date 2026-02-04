@@ -17,9 +17,9 @@ export default function ViewBookings() {
   const handleExportCSV = () => {
     if (!bookings || bookings.length === 0) return;
 
-    const headers = ["ID", "User", "Seat", "Date", "Slot", "Created At"];
-    const rows = bookings.map(b => [
-      b.id,
+    const headers = ["#", "User", "Seat", "Date", "Slot", "Created At"];
+    const rows = bookings.map((b, index) => [
+      index + 1,
       b.user?.username || '',
       b.seat?.label || '',
       b.date,
@@ -92,7 +92,7 @@ export default function ViewBookings() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>#</TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Seat</TableHead>
                   <TableHead>Date</TableHead>
@@ -102,9 +102,9 @@ export default function ViewBookings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((booking) => (
+                {bookings.map((booking, index) => (
                   <TableRow key={booking.id}>
-                    <TableCell className="font-medium">#{booking.id}</TableCell>
+                    <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>{booking.user?.username || 'N/A'}</TableCell>
                     <TableCell>
                       <span className="inline-flex items-center gap-1">
