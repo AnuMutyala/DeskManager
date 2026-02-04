@@ -23,7 +23,9 @@ Desk Manager is a full-stack TypeScript application designed to streamline offic
 - **Recurring Reservations**: Set up weekly or daily recurring bookings with visual availability preview
 - **Smart Conflict Resolution**: When booking full days with conflicts, the system automatically books available half-day slots
 - **Real-time Availability**: Live seat availability checking with visual calendar indicators
+- **Hover Booking Details**: Instantly view who booked each seat and for which time slot by hovering over occupied seats
 - **My Bookings**: View and manage all your current and upcoming reservations with date filtering
+- **Blocked Seat Alerts**: Visual indicators and warnings for bookings on seats that become blocked
 - **Date Filtering**: Filter bookings by specific date or view all bookings at once
 - **Seat Preferences**: Filter seats by type (with/without monitor) and view seat-specific tags
 

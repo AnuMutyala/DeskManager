@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useBookings } from "@/hooks/use-bookings";
 import { format, isFuture, parseISO } from "date-fns";
-import { Armchair, CalendarDays, Clock, Trash2, X } from "lucide-react";
+import { Armchair, CalendarDays, Clock, Trash2, X, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
 export default function MyBookings() {
@@ -35,6 +35,14 @@ export default function MyBookings() {
 
   const upcoming = filteredBookings.filter(b => isFuture(parseISO(b.date)) || b.date === format(new Date(), 'yyyy-MM-dd'));
   const past = filteredBookings.filter(b => !isFuture(parseISO(b.date)) && b.date !== format(new Date(), 'yyyy-MM-dd'));
+
+  // Helper to check if a seat is blocked on a specific date
+  const isSeatBlockedOnDate = (seat: any, dateString: string): boolean => {
+    if (seat.blockStartDate && seat.blockEndDate) {
+      return dateString >= seat.blockStartDate && dateString <= seat.blockEndDate;
+    }
+    return seat.isBlocked || false;
+  };
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in">
@@ -97,8 +105,10 @@ export default function MyBookings() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {upcoming.map((booking) => (
-              <Card key={booking.id} className="group hover:shadow-md transition-all border-l-4 border-l-primary">
+            {upcoming.map((booking) => {
+              const isBlocked = isSeatBlockedOnDate(booking.seat, booking.date);
+              return (
+              <Card key={booking.id} className={`group hover:shadow-md transition-all border-l-4 ${isBlocked ? 'border-l-red-500 bg-red-50/50' : 'border-l-primary'}`}>
                 <CardContent className="p-6 flex justify-between items-center">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-primary font-medium">
@@ -114,13 +124,19 @@ export default function MyBookings() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
                       <span className="bg-secondary px-3 py-1 rounded-full text-sm font-semibold">
                         Seat {booking.seat.label}
                       </span>
                       <span className="text-xs text-muted-foreground capitalize">
                         {booking.seat.type}
                       </span>
+                      {isBlocked && (
+                        <span className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">
+                          <AlertTriangle className="w-3 h-3" />
+                          Seat Blocked
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -134,7 +150,13 @@ export default function MyBookings() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to cancel your reservation for {format(parseISO(booking.date), "MMM do")}? This action cannot be undone.
+                          Are you sure you want to cancel your reservation for {format(parseISO(booking.date), "MMM do")}?
+                          {isBlocked && (
+                            <span className="block mt-2 text-red-600 font-medium">
+                              Note: This seat is currently blocked and may not be available for rebooking.
+                            </span>
+                          )}
+                          This action cannot be undone.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -150,7 +172,7 @@ export default function MyBookings() {
                   </AlertDialog>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
 

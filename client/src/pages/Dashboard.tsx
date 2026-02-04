@@ -162,39 +162,58 @@ export default function Dashboard() {
       ? dateStr >= seat.blockStartDate && dateStr <= seat.blockEndDate
       : seat.isBlocked || false;
     const seatBookings = (bookings || []).filter(b => b.seatId === seat.id);
-    const tooltip = seatBookings.length > 0 ? seatBookings.map(b => `${b.user?.username || 'user'} — ${b.slot}`).join('\n') : undefined;
 
     return (
-      <button
-        key={seat.id}
-        disabled={isBlocked || status === 'booked'}
-        onClick={() => setSelectedSeat(seat)}
-        title={tooltip}
-        data-testid={`button-seat-${seat.label}`}
-        className={`
-          group relative w-12 h-12 rounded-lg border-2 transition-all duration-300
-          flex flex-col items-center justify-center
-          ${isBlocked
-            ? 'bg-red-50 border-red-100 opacity-60 cursor-not-allowed'
-            : status === 'booked'
-              ? 'bg-slate-100 border-slate-200 cursor-not-allowed'
-              : status === 'partial'
-                ? 'bg-amber-50 border-amber-200 hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5'
-                : 'bg-white border-green-200 hover:border-green-400 hover:shadow-md hover:-translate-y-0.5'
-          }
-        `}
-      >
-        <span className="text-[10px] font-bold">{seat.label}</span>
-        {( seat.type === SeatType.REGULAR) && (
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-card/90 px-1 rounded-md border border-border/50">🖥️</div>
-        )}
-        {status !== 'available' && !isBlocked && (
-          <div className="flex gap-0.5 mt-0.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${am ? 'bg-amber-500' : 'bg-slate-200'}`} />
-            <div className={`w-1.5 h-1.5 rounded-full ${pm ? 'bg-amber-500' : 'bg-slate-200'}`} />
+      <div className="relative group/seat">
+        <button
+          key={seat.id}
+          disabled={isBlocked || status === 'booked'}
+          onClick={() => setSelectedSeat(seat)}
+          data-testid={`button-seat-${seat.label}`}
+          className={`
+            relative w-12 h-12 rounded-lg border-2 transition-all duration-300
+            flex flex-col items-center justify-center
+            ${isBlocked
+              ? 'bg-red-50 border-red-100 opacity-60 cursor-not-allowed'
+              : status === 'booked'
+                ? 'bg-slate-100 border-slate-200 cursor-not-allowed'
+                : status === 'partial'
+                  ? 'bg-amber-50 border-amber-200 hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5'
+                  : 'bg-white border-green-200 hover:border-green-400 hover:shadow-md hover:-translate-y-0.5'
+            }
+          `}
+        >
+          <span className="text-[10px] font-bold">{seat.label}</span>
+          {( seat.type === SeatType.REGULAR) && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-card/90 px-1 rounded-md border border-border/50">🖥️</div>
+          )}
+          {status !== 'available' && !isBlocked && (
+            <div className="flex gap-0.5 mt-0.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${am ? 'bg-amber-500' : 'bg-slate-200'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${pm ? 'bg-amber-500' : 'bg-slate-200'}`} />
+            </div>
+          )}
+        </button>
+
+        {/* Booking info popup - shows on hover */}
+        {seatBookings.length > 0 && (
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none opacity-0 group-hover/seat:opacity-100 transition-opacity duration-200 z-50">
+            <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+              <div className="flex flex-col gap-1">
+								<span className="text-slate-300">Booked by</span>
+                {seatBookings.map((b, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="font-semibold">{b.user?.username || 'User'}</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-300">{b.slot}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900" />
+            </div>
           </div>
         )}
-      </button>
+      </div>
     );
   };
 
@@ -212,7 +231,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-4xl font-bold font-display text-foreground">Office Floor Plan</h1>
-          <p className="text-muted-foreground mt-1">Select a seat to book it for the day.</p>
+          <p className="text-muted-foreground mt-1">Select a seat to book it for the day. Hover over booked seats to see who reserved them.</p>
         </div>
 
         <div className="flex items-center gap-4 bg-card p-2 rounded-xl border border-border/50 shadow-sm">
